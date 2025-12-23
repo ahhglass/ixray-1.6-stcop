@@ -38,6 +38,12 @@ void CCustomOutfit::Load(const char* section)
 	IsExo = READ_IF_EXISTS(pSettings, r_bool, section, "is_exo", false);
 	IsExoProto = READ_IF_EXISTS(pSettings, r_bool, section, "is_exo_proto", false);
 
+	m_StepSoundClank = READ_IF_EXISTS(pSettings, r_string, section, "step_sound_clank", "");
+	m_StepSoundRustle = READ_IF_EXISTS(pSettings, r_string, section, "step_sound_rustle", "");
+	m_SoundJumpEquip = READ_IF_EXISTS(pSettings, r_string, section, "sound_jump_equipment", "");
+	m_DeflectionSoundPath = READ_IF_EXISTS(pSettings, r_string, section, "deflection_sound_path", "");
+	m_ArmorType = READ_IF_EXISTS(pSettings, r_string, section, "armor_type", "");
+
 	if (pSettings->line_exist(section, "character_portrait"))
 	{
 		m_character_portrait = pSettings->r_string(section, "character_portrait");
@@ -57,6 +63,11 @@ void CCustomOutfit::OnMoveToSlot(const SInvItemPlace& prev)
 			{
 				pActor->inventory().Ruck(pHelmet, false);
 			}
+
+			pActor->m_outfit_snd.LoadClank(m_StepSoundClank);
+			pActor->m_outfit_snd.LoadRustle(m_StepSoundRustle);
+			pActor->m_outfit_snd.LoadJump(m_SoundJumpEquip);
+			pActor->m_outfit_snd.LoadDeflectionSounds(m_DeflectionSoundPath);
 		}
 	}
 }
@@ -84,6 +95,9 @@ void CCustomOutfit::OnMoveToRuck(const SInvItemPlace& prev)
 					pTorch->Switch(false);
 				}
 			}
+
+			pActor->m_outfit_snd.ResetToDefault();
+			pActor->m_outfit_snd.ClearDeflectionSounds();
 		}
 	}
 }

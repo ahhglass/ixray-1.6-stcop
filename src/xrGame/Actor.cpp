@@ -607,6 +607,8 @@ void CActor::Load	(const char* section )
 			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_crouch_slow_out_snd", "OnCrouchSlowOutSnd", false, sg_SourceType, st_Effect);
 			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_lookout_snd", "OnLookoutSnd", false, sg_SourceType, st_Effect);
 		}
+
+		m_outfit_snd.LoadFromActorConfig(section);
 	}
 
 	cam_Set(eacFirstEye);
@@ -963,6 +965,12 @@ void	CActor::Hit(SHit* pHDS)
 				CalcHitDamage(&HDS)
 			);
 
+			// Deflection hit effects / Эффекты попадания в броню
+			if (g_Alive() && m_outfit_snd.IsHitSoundsEnabled() && m_outfit_snd.IsActorHitSoundsEnabled())
+			{
+				m_outfit_snd.OnActorHit(&HDS, HDS.boneID);
+			}
+			//lначало обновления звука попадания
 			HitArtefactsCondition(HDS);
 			inherited::Hit(&HDS);
 		}
@@ -1207,6 +1215,10 @@ void CActor::FootStepCallback(float power, bool b_play, bool b_on_ground, bool b
 			}
 		}
 	}
+
+	// Play custom outfit step sounds / Звуки шагов костюма
+	if (b_play && b_on_ground)
+		m_outfit_snd.Play(power, b_hud_view, this); //lxrd
 
 	CGameObject::FootStepCallback(power, b_play, b_on_ground, b_hud_view);
 }

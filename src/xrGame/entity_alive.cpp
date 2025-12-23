@@ -15,6 +15,7 @@
 #include "EntityCondition.h"
 #include "script_game_object.h"
 #include "Hit.h"
+#include "OutfitSoundManager.h"
 #include "PHDestroyable.h"
 #include "CharacterPhysicsSupport.h"
 #include "../xrScripts/script_callback_ex.h"
@@ -360,6 +361,18 @@ void CEntityAlive::Hit(SHit* pHDS)
 		{
 			RELATION_REGISTRY().FightRegister(EA->ID(), ID(), this->tfGetRelationType(EA), HDS.damage());
 			RELATION_REGISTRY().Action(EA, this, RELATION_REGISTRY::ATTACK);
+		}
+	}
+
+	if (HDS.who)
+	{
+		if (CActor* actor = HDS.who->cast_actor())
+		{
+			if (actor->g_Alive() && actor->ID() != ID())
+			{
+				if (COutfitSoundManager::IsNPCHitSoundsEnabled())
+					actor->GetOutfitSoundManager().OnNPCHit(this, pHDS, HDS.boneID);
+			}
 		}
 	}
 

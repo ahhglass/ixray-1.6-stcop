@@ -18,6 +18,9 @@ public:
 
 	virtual CHelmet*	cast_helmet				() override { return this; }
 
+	shared_str m_DeflectionSoundPath;
+	shared_str m_HelmetType;
+
 	float m_fShowNearestEnemiesDistance = 0.0f;
 
 protected:

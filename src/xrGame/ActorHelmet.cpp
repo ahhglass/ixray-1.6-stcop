@@ -11,11 +11,19 @@ void CHelmet::Load(const char* section)
 	inherited::Load(section);
 
 	m_fShowNearestEnemiesDistance = READ_IF_EXISTS(pSettings, r_float, section, "nearest_enemies_show_dist", 0.0f);
+	m_DeflectionSoundPath = READ_IF_EXISTS(pSettings, r_string, section, "deflection_sound_path", "");
+	m_HelmetType = READ_IF_EXISTS(pSettings, r_string, section, "helmet_type", "");
 }
 
 void CHelmet::OnMoveToSlot(const SInvItemPlace& previous_place)
 {
 	inherited::OnMoveToSlot(previous_place);
+	if (m_pInventory != nullptr && previous_place.type != eItemPlaceSlot)
+	{
+		CActor* pActor = H_Parent() ? H_Parent()->cast_actor() : nullptr;
+		if (pActor)
+			pActor->m_outfit_snd.LoadHelmetDeflectionSounds(m_DeflectionSoundPath);
+	}
 }
 
 void CHelmet::OnMoveToRuck(const SInvItemPlace& previous_place)
@@ -39,6 +47,9 @@ void CHelmet::OnMoveToRuck(const SInvItemPlace& previous_place)
 				pTorch->Switch(false);
 			}
 		}
+
+		if (pActor != nullptr)
+			pActor->m_outfit_snd.ClearHelmetDeflectionSounds();
 	}
 }
 

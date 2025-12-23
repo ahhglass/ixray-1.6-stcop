@@ -41,6 +41,12 @@ public:
 	float m_additional_weight = 0.0f;
 	float m_additional_weight2 = 0.0f;
 
+	shared_str m_StepSoundClank;
+	shared_str m_StepSoundRustle;
+	shared_str m_SoundJumpEquip;
+	shared_str m_DeflectionSoundPath;
+	shared_str m_ArmorType;
+
 	bool bIsHelmetAvaliable = true;
 	bool IsExo = false;
 	bool IsExoProto = false;

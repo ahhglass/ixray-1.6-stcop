@@ -63,6 +63,10 @@ void CActor::g_cl_ValidateMState(float dt, u32 mstate_wf)
 	}
 	// закончить падение
 	if (character_physics_support()->movement()->gcontact_Was){
+		// Звук приземления только при реальном падении и не на лестнице
+		const bool bWasFalling = !!(mstate_real & mcFall);
+		const bool bOnGround = character_physics_support()->movement()->Environment() == CPHMovementControl::peOnGround;
+
 		if (mstate_real&mcFall){
 			if (character_physics_support()->movement()->GetContactSpeed()>4.f){
 				if (fis_zero(character_physics_support()->movement()->gcontact_HealthLost)){	
@@ -78,6 +82,7 @@ void CActor::g_cl_ValidateMState(float dt, u32 mstate_wf)
 		}
 
 		PlayRainStep(!!HUDview());
+		m_outfit_snd.PlayJump(!!HUDview(), this); //lxrd
 		PlayExoStep(!!HUDview());
 
 		m_bJumpKeyPressed	=	true;
@@ -242,6 +247,7 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 			m_fJumpTime			= s_fJumpTime;
 
 			PlayRainStep(!!HUDview());
+			m_outfit_snd.PlayJump(!!HUDview(), this);
 			PlayExoStep(!!HUDview());
 
 			//уменьшить силу игрока из-за выполненого прыжка

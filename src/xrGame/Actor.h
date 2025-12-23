@@ -23,6 +23,7 @@
 #include "HudAnimatorManager.h"
 #include "nvg.h"
 #include "HudSound.h"
+#include "OutfitSoundManager.h"
 
 
 using namespace ACTOR_DEFS;
@@ -981,6 +982,11 @@ public:
 
 	void SetBestEnemy(CScriptGameObject* enemy);
 	CScriptGameObject* GetBestEnemy();
+
+	// Менеджер звуков брони: бряцание (clank), шуршание (rustle) и звуки прыжка
+	COutfitSoundManager m_outfit_snd;
+public:
+	COutfitSoundManager& GetOutfitSoundManager() { return m_outfit_snd; }
 
 	bool OnLadder = false;
 	IC bool is_ladder() const { return OnLadder; };
