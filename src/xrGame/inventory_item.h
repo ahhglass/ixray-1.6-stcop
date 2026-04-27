@@ -215,7 +215,11 @@ public:
 	{
 		RStringVec m_items = {};
 		FloatVec m_chances = {};
+		shared_str m_sound;
 	} m_parse_params;
+
+	shared_str m_pickup_sound_custom;
+	bool PlayPickupSound();
 
 	virtual void OnMoveToSlot(const SInvItemPlace& prev) {};
 	virtual void OnMoveToBelt(const SInvItemPlace& prev) {};

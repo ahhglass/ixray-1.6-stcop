@@ -364,8 +364,8 @@ void CUIActorMenuBase::PlayItemMoveSound(PIItem item, eActorMenuSndAction fallba
 {
 	if (item && item->m_pickup_sound_custom && item->m_pickup_sound_custom.size())
 	{
-		item->PlayPickupSound();
-		return;
+		if (item->PlayPickupSound())
+			return;
 	}
 
 	PlaySnd(fallbackSound);

@@ -42,8 +42,27 @@ void CItemPickupSounds::LoadSoundsByPrefix(LPCSTR prefix, SSoundCategory& cat)
 	FS_FileSet files;
 	FS.file_list(files, _game_sounds_, FS_ListFiles | FS_ClampExt, pattern);
 
+	const xr_string prefixStr = prefix;
+	const size_t prefixLen = prefixStr.size();
+
 	for (FS_FileSetIt it = files.begin(), it_e = files.end(); it != it_e; ++it)
 	{
+		const xr_string soundName = it->name.c_str();
+		if (soundName.size() < prefixLen || soundName.compare(0, prefixLen, prefixStr) != 0)
+			continue;
+
+		if (soundName.size() == prefixLen)
+		{
+			ref_sound snd;
+			snd.create(it->name.c_str(), st_Effect, sg_SourceType);
+			cat.sounds.push_back(snd);
+			continue;
+		}
+
+		const char suffixFirst = soundName[prefixLen];
+		if (suffixFirst < '0' || suffixFirst > '9')
+			continue;
+
 		ref_sound snd;
 		snd.create(it->name.c_str(), st_Effect, sg_SourceType);
 		cat.sounds.push_back(snd);
@@ -85,17 +104,18 @@ float CItemPickupSounds::CalculateVolume(float volume) const
 	return volume;
 }
 
-void CItemPickupSounds::PlaySoundInternal(ref_sound& snd, float volume)
+bool CItemPickupSounds::PlaySoundInternal(ref_sound& snd, float volume)
 {
 	if (!snd.handle())
-		return;
+		return false;
 
 	if (!Sound)
-		return;
+		return false;
 
 	snd.play(nullptr, sm_2D);
 	snd.set_volume(volume);
 	_lastPlayTime = Device.dwTimeGlobal;
+	return true;
 }
 
 bool CItemPickupSounds::CanPlaySound() const
@@ -107,64 +127,63 @@ bool CItemPickupSounds::CanPlaySound() const
 	return (currentTime >= _lastPlayTime + MIN_SOUND_INTERVAL);
 }
 
-void CItemPickupSounds::PlaySound(LPCSTR categoryName, float volume)
+bool CItemPickupSounds::PlaySound(LPCSTR categoryName, float volume)
 {
 	if (!categoryName || !categoryName[0])
-		return;
+		return false;
 
 	if (_categories.empty())
 		Initialize();
 
 	if (!CanPlaySound())
-		return;
+		return false;
 
 	xr_string catName = categoryName;
 	xr_map<xr_string, SSoundCategory>::iterator it = _categories.find(catName);
 	if (it == _categories.end())
-		return;
+		return false;
 
 	SSoundCategory& cat = it->second;
 	if (!cat.initialized || cat.sounds.empty())
-		return;
+		return false;
 
 	const float finalVolume = CalculateVolume(volume);
 	const u32 soundCount = (u32)cat.sounds.size();
 	const u32 idx = (soundCount > 1) ? Random.randI(soundCount) : 0;
 	ref_sound& snd = cat.sounds[idx];
-	PlaySoundInternal(snd, finalVolume);
+	return PlaySoundInternal(snd, finalVolume);
 }
 
-void CItemPickupSounds::PlaySound(EItemPickupSoundType type, LPCSTR categoryName, float volume)
+bool CItemPickupSounds::PlaySound(EItemPickupSoundType type, LPCSTR categoryName, float volume)
 {
 	if (type == EItemPickupSoundType::None)
-		return;
+		return false;
 
 	if (type == EItemPickupSoundType::Custom)
 	{
-		PlayCustomSound(categoryName, volume);
-		return;
+		return PlayCustomSound(categoryName, volume);
 	}
 
-	PlaySound(categoryName, volume);
+	return PlaySound(categoryName, volume);
 }
 
-void CItemPickupSounds::PlayCustomSound(LPCSTR soundPath, float volume)
+bool CItemPickupSounds::PlayCustomSound(LPCSTR soundPath, float volume)
 {
 	if (!soundPath || !soundPath[0])
-		return;
+		return false;
 
 	if (!CanPlaySound())
-		return;
+		return false;
 
 	string_path fn;
 	if (!FS.exist(fn, _game_sounds_, soundPath, ".ogg"))
-		return;
+		return false;
 
 	const float finalVolume = CalculateVolume(volume);
 	ref_sound snd;
 	snd.create(soundPath, st_Effect, sg_SourceType);
 
-	PlaySoundInternal(snd, finalVolume);
+	return PlaySoundInternal(snd, finalVolume);
 }
 
 EItemPickupSoundType CItemPickupSounds::ParseSoundType(LPCSTR str, xr_string& outCategoryName)

@@ -1164,15 +1164,15 @@ bool CInventoryItem::has_network_synchronization() const
 	return false;
 }
 
-void CInventoryItem::PlayPickupSound()
+bool CInventoryItem::PlayPickupSound()
 {
 	if (!m_pickup_sound_custom || !m_pickup_sound_custom.size())
-		return;
+		return false;
 
 	xr_string categoryName;
 	const EItemPickupSoundType type = CItemPickupSounds::ParseSoundType(m_pickup_sound_custom.c_str(), categoryName);
 	if (type == EItemPickupSoundType::None)
-		return;
+		return false;
 
-	ItemPickupSounds().PlaySound(type, categoryName.c_str());
+	return ItemPickupSounds().PlaySound(type, categoryName.c_str());
 }

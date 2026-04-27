@@ -28,7 +28,7 @@ private:
 	void LoadSoundsByPrefix(LPCSTR prefix, SSoundCategory& cat);
 	bool CanPlaySound() const;
 	float CalculateVolume(float volume) const;
-	void PlaySoundInternal(ref_sound& snd, float volume);
+	bool PlaySoundInternal(ref_sound& snd, float volume);
 	void clear();
 
 public:
@@ -38,9 +38,9 @@ public:
 	static CItemPickupSounds& Instance();
 
 	void Initialize();
-	void PlaySound(LPCSTR categoryName, float volume = 1.0f);
-	void PlaySound(EItemPickupSoundType type, LPCSTR categoryName, float volume = 1.0f);
-	void PlayCustomSound(LPCSTR soundPath, float volume = 1.0f);
+	bool PlaySound(LPCSTR categoryName, float volume = 1.0f);
+	bool PlaySound(EItemPickupSoundType type, LPCSTR categoryName, float volume = 1.0f);
+	bool PlayCustomSound(LPCSTR soundPath, float volume = 1.0f);
 	static EItemPickupSoundType ParseSoundType(LPCSTR str, xr_string& outCategoryName);
 };
 
