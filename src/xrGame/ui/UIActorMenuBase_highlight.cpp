@@ -5,6 +5,66 @@
 #include "../WeaponMagazinedWGrenade.h"
 #include "../InventoryWeaponSlotLayout.h"
 
+namespace // Подсветка оружия в слоте при наведении на патроны/аддоны
+{
+	bool WeaponSupportsAmmoType(CWeapon* weapon, const shared_str& ammoSection)
+	{
+		if (weapon == nullptr)
+		{
+			return false;
+		}
+
+		for (const shared_str& ammoType : weapon->m_ammoTypes)
+		{
+			if (ammoSection._get() == ammoType._get())
+			{
+				return true;
+			}
+		}
+
+		CWeaponMagazinedWGrenade* weaponWithGrenade = smart_cast<CWeaponMagazinedWGrenade*>(weapon);
+		if (weaponWithGrenade == nullptr || !weaponWithGrenade->IsGrenadeLauncherAttached())
+		{
+			return false;
+		}
+
+		for (const shared_str& grenadeAmmoType : weaponWithGrenade->m_ammoTypes2)
+		{
+			if (ammoSection._get() == grenadeAmmoType._get())
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool WeaponSupportsAddon(CWeapon* weapon, PIItem addonItem)
+	{
+		if (weapon == nullptr || addonItem == nullptr)
+		{
+			return false;
+		}
+
+		if (CScope* scopeAddon = addonItem->cast_addon_scope())
+		{
+			return weapon->ScopeAttachable() && weapon->ScopeFit(scopeAddon);
+		}
+
+		if (CSilencer* silencerAddon = addonItem->cast_addon_silencer())
+		{
+			return weapon->CanAttach(silencerAddon);
+		}
+
+		if (CGrenadeLauncher* grenadeLauncherAddon = addonItem->cast_addon_grenade_launcher())
+		{
+			return weapon->CanAttach(grenadeLauncherAddon);
+		}
+
+		return false;
+	}
+} // Кончаем подсветку оружия
+
 void CUIActorMenuBase::clear_highlight_lists()
 {
 	for (u8 i = 1; i <= LAST_SLOT; ++i)
@@ -77,7 +137,7 @@ void CUIActorMenuBase::set_highlight_item(CUICellItem* cell_item)
 	case mmDeadBodySearch:
 		{
 			highlight_armament( item, GetActorList() );
-			highlight_armament( item, GetActorList() );
+			highlight_armament( item, GetPartnerList() );
 			break;
 		}
 	}
@@ -492,5 +552,54 @@ void CUIActorMenuBase::highlight_item_slot(CUICellItem* cell_item)
 			}
 		}
 		return;
+	}
+	// Наводимся на патроны/аддоны: в слот их не кладём, но подсвечиваем слоты экипированного совместимого оружия.
+	const CWeaponAmmo* ammoItem = item->cast_weapon_ammo();
+	const bool isAddon = item->cast_addon_scope() || item->cast_addon_silencer() || item->cast_addon_grenade_launcher();
+	if (ammoItem == nullptr && !isAddon)
+	{
+		return;
+	}
+
+	CInventoryOwner* owner = GetInventoryOwner();
+	if (owner == nullptr)
+	{
+		return;
+	}
+
+	CInventory& inventory = owner->inventory();
+	for (u8 slot = KNIFE_SLOT; slot <= LAST_SLOT; ++slot)
+	{
+		if (m_pInvSlotHighlight[slot] == nullptr)
+		{
+			continue;
+		}
+
+		PIItem slotItem = inventory.ItemFromSlot(slot);
+		if (slotItem == nullptr)
+		{
+			continue;
+		}
+
+		CWeapon* slotWeapon = slotItem->cast_weapon();
+		if (slotWeapon == nullptr)
+		{
+			continue;
+		}
+
+		bool compatible = false;
+		if (ammoItem != nullptr)
+		{
+			compatible = WeaponSupportsAmmoType(slotWeapon, item->object().cNameSect());
+		}
+		else if (isAddon)
+		{
+			compatible = WeaponSupportsAddon(slotWeapon, item);
+		}
+
+		if (compatible)
+		{
+			m_pInvSlotHighlight[slot]->Show(true);
+		}
 	}
 }
