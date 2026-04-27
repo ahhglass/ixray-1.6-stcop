@@ -347,6 +347,30 @@ void CUIActorMenuBase::PlaySnd(eActorMenuSndAction a)
 		sounds[a].play(nullptr, sm_2D);
 }
 
+void CUIActorMenuBase::PlayParseSound(LPCSTR sound_path)
+{
+	if (m_parse_sound.handle())
+		m_parse_sound.stop();
+
+	if (sound_path && sound_path[0])
+	{
+		::Sound->create(m_parse_sound, sound_path, st_Effect, sg_SourceType);
+		if (m_parse_sound.handle())
+			m_parse_sound.play(nullptr, sm_2D);
+	}
+}
+
+void CUIActorMenuBase::PlayItemMoveSound(PIItem item, eActorMenuSndAction fallbackSound)
+{
+	if (item && item->m_pickup_sound_custom && item->m_pickup_sound_custom.size())
+	{
+		item->PlayPickupSound();
+		return;
+	}
+
+	PlaySnd(fallbackSound);
+}
+
 CUIDragDropListEx* CUIActorMenuBase::GetListByType(EDDListType t)
 {
 	switch(t)

@@ -75,10 +75,13 @@ protected:
 								eSndMax};
 
 	ref_sound					sounds						[eSndMax];
+	ref_sound					m_parse_sound;
 	void						InitBase					(CUIXml& xml);
 	void						InitSlots					(CUIXml& xml);
 	void						InitGamepadSelectors		();
 	void						PlaySnd						(eActorMenuSndAction a);
+	void						PlayParseSound				(LPCSTR sound_path);
+	void						PlayItemMoveSound			(PIItem item, eActorMenuSndAction fallbackSound);
 
 								CUIActorMenuBase			();
 	virtual						~CUIActorMenuBase			();

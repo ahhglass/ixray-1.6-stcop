@@ -395,15 +395,15 @@ void CUIActorMenu::Update()
 
 			if (m_trade_button)
 			{
-				m_trade_button->Show(!pInput->GetControllerMode());
+				m_trade_button->SetVisible(!pInput->GetControllerMode());
 			}
 			if (m_trade_buy_button)
 			{
-				m_trade_buy_button->Show(!pInput->GetControllerMode());
+				m_trade_buy_button->SetVisible(!pInput->GetControllerMode());
 			}
 			if (m_trade_sell_button)
 			{
-				m_trade_sell_button->Show(!pInput->GetControllerMode());
+				m_trade_sell_button->SetVisible(!pInput->GetControllerMode());
 			}
 			break;
 		}

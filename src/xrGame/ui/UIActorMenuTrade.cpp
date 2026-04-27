@@ -291,8 +291,8 @@ void CUIActorMenu::UpdatePrices()
 //	m_PartnerTradeCaption->SetWndPos( pos );
 
 // Update trade buttons state based on items in trade lists
-	bool has_actor_items = m_pTradeActorList->ItemsCount() > 0;
-	bool has_partner_items = m_pTradePartnerList->ItemsCount() > 0;
+	const bool has_actor_items = m_pTradeActorList && (m_pTradeActorList->ItemsCount() > 0);
+	const bool has_partner_items = m_pTradePartnerList && (m_pTradePartnerList->ItemsCount() > 0);
 
 	if (m_trade_button)
 		m_trade_button->Enable(has_actor_items || has_partner_items);

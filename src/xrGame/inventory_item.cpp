@@ -19,6 +19,7 @@
 #include "../xrEngine/string_table.h"
 #include "ai_object_location.h"
 #include "object_broker.h"
+#include "item_pickup_sounds.h"
 
 #ifdef DEBUG_DRAW
 #	include "debug_renderer.h"
@@ -62,6 +63,7 @@ CInventoryItem::CInventoryItem()
 
 	m_custom_mark_offset.set(0.0f, 0.0f);
 	m_custom_mark_size.set(0.0f, 0.0f);
+	m_pickup_sound_custom = nullptr;
 }
 
 CInventoryItem::~CInventoryItem()
@@ -177,6 +179,7 @@ void CInventoryItem::Load(const char* section)
 	IconsTexture = READ_IF_EXISTS(pSettings, r_string, section, "icons_texture", nullptr);
 
 	m_inv_rect.set(inv_grid_x, inv_grid_y, inv_grid_width, inv_grid_height);
+	m_pickup_sound_custom = READ_IF_EXISTS(pSettings, r_string, section, "snd_on_take", nullptr);
 
 	ReadCustomTextAndMarks(section);
 	Read3dStaticsData(section);
@@ -1159,4 +1162,17 @@ void CInventoryItem::SetDropManual(bool val)
 bool CInventoryItem::has_network_synchronization() const
 {
 	return false;
+}
+
+void CInventoryItem::PlayPickupSound()
+{
+	if (!m_pickup_sound_custom || !m_pickup_sound_custom.size())
+		return;
+
+	xr_string categoryName;
+	const EItemPickupSoundType type = CItemPickupSounds::ParseSoundType(m_pickup_sound_custom.c_str(), categoryName);
+	if (type == EItemPickupSoundType::None)
+		return;
+
+	ItemPickupSounds().PlaySound(type, categoryName.c_str());
 }
