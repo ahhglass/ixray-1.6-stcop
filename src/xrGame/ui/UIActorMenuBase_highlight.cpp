@@ -115,6 +115,11 @@ void CUIActorMenuBase::set_highlight_item(CUICellItem* cell_item)
 		return;
 	}
 
+	if (!m_highlight_clear)
+	{
+		clear_highlight_lists();
+	}
+
 	highlight_item_slot(cell_item);
 
 	switch ( m_currMenuMode )
@@ -136,6 +141,7 @@ void CUIActorMenuBase::set_highlight_item(CUICellItem* cell_item)
 		}
 	case mmDeadBodySearch:
 		{
+			// Ящик/труп: связанные патроны/аддоны и в рюкзаке, и в партнёрском списке (раньше второй вызов был снова GetActorList).
 			highlight_armament( item, GetActorList() );
 			highlight_armament( item, GetPartnerList() );
 			break;
@@ -553,6 +559,7 @@ void CUIActorMenuBase::highlight_item_slot(CUICellItem* cell_item)
 		}
 		return;
 	}
+
 	// Наводимся на патроны/аддоны: в слот их не кладём, но подсвечиваем слоты экипированного совместимого оружия.
 	const CWeaponAmmo* ammoItem = item->cast_weapon_ammo();
 	const bool isAddon = item->cast_addon_scope() || item->cast_addon_silencer() || item->cast_addon_grenade_launcher();
