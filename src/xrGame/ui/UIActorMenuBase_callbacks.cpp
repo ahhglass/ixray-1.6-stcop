@@ -1,5 +1,6 @@
 #include "stdafx.h"
 #include "UIActorMenuBase.h"
+#include "UIActorMenuQoL.h"
 #include "UIDragDropListEx.h"
 #include "UICellItem.h"
 #include "../InventoryOwner.h"
@@ -373,6 +374,14 @@ bool CUIActorMenuBase::OnItemDbClick(CUICellItem* itm)
 {
 	SetCurrentItem(itm);
 	InfoCurItem( nullptr );
+
+	if (m_pQoL && m_pQoL->ProcessShiftDoubleClick(itm))
+	{
+		UpdateConditionProgressBars();
+		UpdateItemsPlace();
+		return true;
+	}
+
 	CUIDragDropListEx*	old_owner		= itm->OwnerList();
 	EDDListType t_old					= GetListType(old_owner);
 	bool bItemPack = itm->ChildsCount() > 0;

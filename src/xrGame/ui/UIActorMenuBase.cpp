@@ -28,6 +28,7 @@
 #include "UITalkDialogWnd.h"
 #include "../../xrUI/Widgets/UIBtnHint.h"
 #include "UIInventoryUpgradeWnd.h"
+#include "UIActorMenuQoL.h"
 
 void move_item_from_to (u16 from_id, u16 to_id, u16 what_id)
 {
@@ -82,6 +83,8 @@ CUIActorMenuBase::CUIActorMenuBase()
 
 	for (int i = 0; i < sizeof(repeatActions) / sizeof(repeatActions[0]); ++i)
 		ActionRepeaters()->Register(this, repeatActions[i]);
+
+	m_pQoL = new CUIActorMenuQoL(this);
 }
 
 CUIActorMenuBase::~CUIActorMenuBase()
@@ -92,6 +95,7 @@ CUIActorMenuBase::~CUIActorMenuBase()
 
 	xr_delete(m_ui_navigation_selector);
 	xr_delete(m_ui_aux_selector);
+	xr_delete(m_pQoL);
 
 	ClearAllLists();
 
@@ -1296,6 +1300,11 @@ void CUIActorMenuBase::UpdateGamepadLegend()
 
 bool CUIActorMenuBase::OnMouseAction( float x, float y, EUIMessages mouse_action )
 {
+	if (mouse_action == WINDOW_MOUSE_MOVE && m_pQoL)
+	{
+		m_pQoL->TrySwipeSelection(x, y);
+	}
+
 	inherited::OnMouseAction( x, y, mouse_action );
 	return true; // no click`s
 }

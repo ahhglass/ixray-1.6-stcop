@@ -20,6 +20,7 @@ class CUIItemStateDisplay;
 class CUIItemInfo;
 class CUITabControl;
 class CUIInventoryUpgradeWnd;
+class CUIActorMenuQoL;
 
 const u64 INVENTORY_ALL_CODE = 33;
 const u64 INVENTORY_AMOUNT_CODE = 77;
@@ -62,6 +63,7 @@ class CUIActorMenuBase : public CUIDialogWnd
 private:
 	typedef CUIDialogWnd inherited;
 protected:
+	friend class CUIActorMenuQoL;
 	enum eActorMenuSndAction{	eSndOpen	=0,
 								eSndClose,
 								eItemToSlot,
@@ -273,6 +275,8 @@ protected:
 	float						m_selectorPadding = 4.0f;
 
 	CUIGamepadLegend*			m_gamepad_legend = nullptr;
+
+	CUIActorMenuQoL*			m_pQoL = nullptr;
 
 	const char* m_onCanMoveToPartner = {};
 	bool m_isCanMoveToPartner = false;
