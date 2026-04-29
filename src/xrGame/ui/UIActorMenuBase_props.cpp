@@ -1000,10 +1000,29 @@ void CUIActorMenuBase::ProcessPropertiesBoxClicked(CUIWindow* w, void* d)
 			break;
 		}
 
+		ALife::_OBJECT_ID spawn_parent_id = item->parent_id(); // Фиксим спавн предмета в из разных инвентарей
+		Fvector spawn_pos = actor->Position();
+		u32 spawn_level_vertex_id = actor->ai_location().level_vertex_id();
+		GameGraph::_GRAPH_ID spawn_game_vertex_id = actor->ai_location().game_vertex_id();
+
+		if (CObject* parent_obj = Level().Objects.net_Find(spawn_parent_id))
+		{
+			if (CGameObject* parent_go = parent_obj->cast_game_object())
+			{
+				spawn_pos = parent_obj->Position();
+				spawn_level_vertex_id = parent_go->ai_location().level_vertex_id();
+				spawn_game_vertex_id = parent_go->ai_location().game_vertex_id();
+			}
+		}
+
 		extern CSE_Abstract* CALifeSimulator__spawn_item2(CALifeSimulator* self_, const char* section, const Fvector& position, u32 level_vertex_id, GameGraph::_GRAPH_ID game_vertex_id, ALife::_OBJECT_ID id_parent);
 
 		int Count = item->m_parse_params.m_items.size();
 		int Count2 = item->m_parse_params.m_chances.size();
+		if (Count2 <= 0)
+		{
+			break;
+		}
 
 		for (int i = 0; i < Count; ++i)
 		{
@@ -1020,9 +1039,39 @@ void CUIActorMenuBase::ProcessPropertiesBoxClicked(CUIWindow* w, void* d)
 
 			if (chance >= ::Random.randF(0.0f, 1.0f))
 			{
-				CALifeSimulator__spawn_item2(&tpGame->alife(), *item->m_parse_params.m_items[i], actor->Position(), actor->ai_location().level_vertex_id(), actor->ai_location().game_vertex_id(), actor->ID());
+				CALifeSimulator__spawn_item2(&tpGame->alife(), *item->m_parse_params.m_items[i], spawn_pos, spawn_level_vertex_id, spawn_game_vertex_id, spawn_parent_id); // Мелкий фиксик
 			}
 		}
+
+		const char* parse_snd = nullptr; // Проигрываем звук разбора предмета
+		if (pSettings->line_exist(item->m_section_id, "parse_sound"))
+		{
+			parse_snd = pSettings->r_string(item->m_section_id, "parse_sound");
+		}
+		else if (pSettings->line_exist(item->m_section_id, "snd_parse"))
+		{
+			// Альтернативное название звука разбора предмета
+			parse_snd = pSettings->r_string(item->m_section_id, "snd_parse");
+		}
+
+		if (parse_snd != nullptr && parse_snd[0] != 0)
+		{
+			static ref_sound snd_parse_runtime;
+			snd_parse_runtime.stop();
+			snd_parse_runtime.create(parse_snd, st_Effect, sg_SourceType);
+			if (snd_parse_runtime.handle())
+			{
+				snd_parse_runtime.play(nullptr, sm_2D);
+			}
+		} // Кончаем играть звук разбора предмета
+
+		const u16 recipient = GetInventoryOwner()->object_id();
+		if (item->parent_id() != recipient && cell_item && cell_item->OwnerList())
+		{
+			cell_item->OwnerList()->RemoveItem(cell_item, false);
+		}
+
+		SetCurrentItem(nullptr);
 		item->object().DestroyObject();
 	}break;
 	case INVENTORY_SHOP_OFFER_ITEM_ACTION:
