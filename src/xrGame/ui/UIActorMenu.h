@@ -184,6 +184,7 @@ protected:
 	virtual	void				InfoCurItem							(CUICellItem* cell_item); //on update item
 	
 	void						CheckDistance						();
+	void						TickLootSearch						();
 
 	virtual void				SetupUpgradeItem					();
 	virtual void				TrySetCurUpgrade					();

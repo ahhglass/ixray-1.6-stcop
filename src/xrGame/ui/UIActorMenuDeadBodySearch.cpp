@@ -18,6 +18,7 @@
 #include "../../xrEngine/string_table.h"
 #include "../ai/monsters/basemonster/base_monster.h"
 #include "../Car.h"
+#include "../LootSearchSystem.h"
 
 // -------------------------------------------------------------------------------------------------
 
@@ -70,6 +71,12 @@ void CUIActorMenu::InitDeadBodySearchMode()
 	}
 	UpdateDeadBodyBag();
 	SetAreaSelectionTo(m_pDeadBodyBagList);
+	// начало поиска предметов на трупе
+	if (CLootSearchSystem::Get().IsEnabled() && m_pPartnerInvOwner)
+	{
+		CLootSearchSystem::Get().BeginSearch(m_pPartnerInvOwner, this);
+		UpdateDeadBodyBagList();
+	}
 }
 
 void CUIActorMenu::DeInitDeadBodySearchMode()
@@ -80,6 +87,7 @@ void CUIActorMenu::DeInitDeadBodySearchMode()
 	m_PartnerBottomInfo->Show		(false);
 	m_PartnerWeight->Show			(false);
 	m_takeall_button->Show			(false);
+	m_takeall_button->Enable		(true);
 
 	if (m_putall_button != nullptr)
 	{
@@ -89,6 +97,11 @@ void CUIActorMenu::DeInitDeadBodySearchMode()
 	if ( m_pInvBox )
 	{
 		m_pInvBox->set_in_use( false );
+	}
+	// завершение поиска предметов на трупе
+	if (CLootSearchSystem::Get().IsEnabled())
+	{
+		CLootSearchSystem::Get().EndSearch(this);
 	}
 }
 

@@ -9,6 +9,7 @@
 #include "../trade.h"
 #include "../Inventory.h"
 #include "../InventoryVolumeSystem.h"
+#include "../LootSearchSystem.h"
 #include "../InventoryWeaponSlotLayout.h"
 #include "../eatable_item_object.h"
 #include "../../xrUI/UICursor.h"
@@ -574,11 +575,21 @@ void CUIActorMenuBase::TakeAllFromPartner(CUIWindow* w, void* d)
 		}
 		return;
 	}
+	// проверка, можно ли взять все предметы с трупа
+	if (CLootSearchSystem::Get().IsEnabled() && !CLootSearchSystem::Get().CanTakeAll(GetPartner()))
+	{
+		return;
+	}
 
 	u32 const cnt = GetPartnerList()->ItemsCount();
 	for ( u32 i = 0; i < cnt; ++i )
 	{
 		CUICellItem* ci = GetPartnerList()->GetItemIdx(i);
+		if (!IsAllowTakeFromInvBox(ci)) // проверка, можно ли взять предмет с трупа
+		{
+			continue;
+		}
+
 		for ( u32 j = 0; j < ci->ChildsCount(); ++j )
 		{
 			PIItem j_item = (PIItem)(ci->Child(j)->m_pData);
@@ -902,6 +913,15 @@ bool CUIActorMenuBase::ToBag(CUICellItem* itm, bool b_use_cursor_pos)
 // FFx0001 
 bool CUIActorMenuBase::IsAllowTakeFromInvBox(CUICellItem* itm)
 {
+	PIItem item = itm ? (PIItem)itm->m_pData : nullptr; // получение предмета из ячейки
+	if (CLootSearchSystem::Get().IsEnabled() && item && GetPartner())
+	{
+		if (!CLootSearchSystem::Get().CanTakeItem(item, GetPartner())) // проверка, можно ли взять предмет с трупа
+		{
+			return false;
+		}
+	}
+
 	if (!m_isInvBoxCanTakeItem) 
 	{
 		return true;
@@ -913,7 +933,7 @@ bool CUIActorMenuBase::IsAllowTakeFromInvBox(CUICellItem* itm)
 		luabind::functor<bool> funct;
 		R_ASSERT2(ai().script_engine().functor(m_onInvBoxCanTakeItem, funct), make_string<const char*>("failed to get %s functor", m_onInvBoxCanTakeItem));
 
-		if (funct(GetInvBox()->cast_game_object()->lua_game_object(), ((PIItem)itm->m_pData)->cast_game_object()->lua_game_object()) == false)
+		if (funct(GetInvBox()->cast_game_object()->lua_game_object(), item->cast_game_object()->lua_game_object()) == false)
 		{
 			return false;
 		}

@@ -544,8 +544,46 @@ void CUICellItem::SetOwnerList(CUIDragDropListEx* p)
 	m_pParentList = p;
 }
 
+void CUICellItem::ShowConditionIndicators(bool show)
+{
+	if (m_pConditionState)
+	{
+		m_pConditionState->Show(show);
+	}
+
+	if (m_pConditionState_filter)
+	{
+		m_pConditionState_filter->Show(show);
+	}
+
+	for (CUIProgressBar* bar : m_pCellsConditions)
+	{
+		if (bar)
+		{
+			bar->Show(show);
+		}
+	}
+}
+
+void CUICellItem::SetLootSearchHideCondition(bool hide)
+{
+	if (m_loot_search_hide_condition == hide)
+	{
+		return;
+	}
+
+	m_loot_search_hide_condition = hide;
+	UpdateItemText();
+}
+
 void CUICellItem::UpdateConditionProgressBar()
 {
+	if (m_loot_search_hide_condition)
+	{
+		ShowConditionIndicators(false);
+		return;
+	}
+
 	if (!m_pConditionState)
 	{
 		return;
@@ -661,15 +699,22 @@ void CUICellItem::UpdateItemText()
         finalText = tempStr;
     }
 
-    if (m_text)
-    {
-        m_text->Show(nullptr != finalText);
-        m_text->SetText(finalText);
-    }
-    else
-    {
-        this->SetText(finalText);
-    }
+    ApplyItemCountText(finalText);
+}
+
+void CUICellItem::ApplyItemCountText(const char* text)
+{
+	const char* finalText = m_loot_search_hide_condition ? nullptr : text;
+
+	if (m_text)
+	{
+		m_text->Show(finalText != nullptr);
+		m_text->SetText(finalText);
+	}
+	else
+	{
+		this->SetText(finalText);
+	}
 }
 
 void CUICellItem::Mark( bool status )

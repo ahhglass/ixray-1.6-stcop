@@ -5,6 +5,7 @@
 #include "UIGameSP.h"
 #include "../Inventory.h"
 #include "../InventoryVolumeSystem.h"
+#include "../LootSearchSystem.h"
 #include "../inventory_item.h"
 #include "../InventoryBox.h"
 #include "object_broker.h"
@@ -406,6 +407,11 @@ void CUIActorMenu::Update()
 			{
 				if (!m_pPartnerInvOwner || !m_pPartnerInvOwner->cast_game_object() || m_pPartnerInvOwner->cast_game_object()->getDestroy())
 				{
+					if (CLootSearchSystem::Get().IsEnabled() && m_pPartnerInvOwner && m_pPartnerInvOwner->cast_game_object()) // очистка целей поиска предметов на трупе
+					{
+						CLootSearchSystem::Get().ClearTarget(m_pPartnerInvOwner->cast_game_object()->ID());
+					}
+
 					g_btnHint->Discard();
 					HideDialog();
 
@@ -413,6 +419,10 @@ void CUIActorMenu::Update()
 					{
 						CurrentGameUI()->TalkMenu->UITalkDialogWnd->Show();
 					}
+				}
+				else
+				{
+					TickLootSearch(); // обновление UI при поиске предметов на трупе
 				}
 			}
 			break;
@@ -427,7 +437,18 @@ void CUIActorMenu::Update()
 	m_exit_button->Show(!pInput->GetControllerMode());
 
 	bool showForDeadbody = m_currMenuMode == mmDeadBodySearch && !pInput->GetControllerMode();
-	m_takeall_button->Show(showForDeadbody);
+	// проверка, можно ли взять все предметы с трупа
+	if (m_takeall_button)
+	{
+		m_takeall_button->Show(showForDeadbody);
+		if (showForDeadbody)
+		{
+			const bool canTakeAll = !m_pPartnerInvOwner ||
+				!CLootSearchSystem::Get().IsEnabled() ||
+				CLootSearchSystem::Get().CanTakeAll(m_pPartnerInvOwner);
+			m_takeall_button->Enable(canTakeAll);
+		}
+	}
 	if (m_putall_button)
 	{
 		m_putall_button->Show(showForDeadbody);
@@ -447,6 +468,26 @@ void CUIActorMenu::Update()
 	{
 		m_trade_sell_button->Show(showForTrade);
 	}
+}
+
+// используется для обновления UI при поиске предметов на трупе
+void CUIActorMenu::TickLootSearch()
+{
+	if (!CLootSearchSystem::Get().IsEnabled() || !m_pPartnerInvOwner)
+	{
+		return;
+	}
+
+	const ELootUpdateFlags lootFlags = CLootSearchSystem::Get().Update(m_pPartnerInvOwner, this);
+	const u32 lootMask = static_cast<u32>(lootFlags);
+
+	if (lootMask & static_cast<u32>(ELootUpdateFlags::ListRefresh))
+	{
+		UpdateDeadBodyBagList();
+	}
+
+	const bool refreshCells = (lootMask & static_cast<u32>(ELootUpdateFlags::VisualRefresh)) != 0;
+	CLootSearchSystem::Get().UpdateVisuals(this, m_pPartnerInvOwner, refreshCells);
 }
 
 void CUIActorMenu::CheckDistance()

@@ -169,15 +169,7 @@ void CUIInventoryCellItem::UpdateItemText()
         finalText = tempStr;
     }
 
-    if (m_text)
-	{
-        m_text->Show(nullptr != finalText);
-        m_text->SetText(finalText);
-	}
-	else
-	{
-		this->SetText(finalText);
-	}
+    ApplyItemCountText(finalText);
 }
 
 CUIAmmoCellItem::CUIAmmoCellItem(CWeaponAmmo* itm)
@@ -222,16 +214,8 @@ void CUIAmmoCellItem::UpdateItemText()
         xr_sprintf(tempStr, "%d", CalculateAmmoCount());
         finalText = tempStr;
     }
-		
-    if (m_text)
-    {
-        m_text->Show(nullptr != finalText);
-        m_text->SetText(finalText);
-    }
-    else
-    {
-        this->SetText(finalText);
-	}
+
+    ApplyItemCountText(finalText);
 }
 
 CUIWeaponCellItem::CUIWeaponCellItem(CWeapon* itm)

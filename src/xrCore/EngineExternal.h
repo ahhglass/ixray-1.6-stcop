@@ -59,6 +59,7 @@ enum class EEngineExternalGame
 	EnableBurerShieldPenetrationWithGauss,
 	EnableWeaponAlternateRPMSystem,
 	EnableInventoryVolume,
+	EnableLootSearch,
 	EnableRealBulletPos,
 	EnableWeaponAffectsOnMouseSensitivity,
 	None

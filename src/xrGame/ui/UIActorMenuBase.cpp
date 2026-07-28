@@ -9,6 +9,7 @@
 #include "../Inventory.h"
 #include "../InventoryWeaponSlotLayout.h"
 #include "../inventory_item.h"
+#include "../LootSearchSystem.h"
 #include "../medkit.h"
 #include "../Weapon.h"
 #include "../trade_parameters.h"
@@ -821,8 +822,21 @@ void CUIActorMenuBase::UpdateDeadBodyBagList()
 
 	for (PIItem item : items_list)
 	{
+		if (CLootSearchSystem::Get().IsEnabled() && GetPartner())
+		{
+			if (!CLootSearchSystem::Get().ShouldDisplayItem(item, GetPartner()))
+			{
+				continue;
+			}
+		}
+
 		CUICellItem* itm = create_cell_item(item);
 		GetPartnerList()->SetItem(itm);
+		// применение визуальных эффектов для предметов на трупе
+		if (CLootSearchSystem::Get().IsEnabled() && GetPartner())
+		{
+			CLootSearchSystem::Get().ApplyItemVisual(itm, item, GetPartner());
+		}
 	}
 }
 

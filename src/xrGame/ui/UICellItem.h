@@ -49,6 +49,7 @@ protected:
 	xr_vector<CUIProgressBar*> m_pCellsConditions;
 
 	virtual void			UpdateItemText			();
+			void			ApplyItemCountText		(const char* text);
 			void			init					();
 public:
 							CUICellItem				();
@@ -76,6 +77,8 @@ public:
 	CUIDragDropListEx*		OwnerList				()						{return m_pParentList;}
 				void		SetOwnerList			(CUIDragDropListEx* p);
 				void		UpdateConditionProgressBar();
+				void		ShowConditionIndicators	(bool show);
+				void		SetLootSearchHideCondition(bool hide);
 				void		SetCustomDraw			(ICustomDrawCellItem* c);
 				void		Mark					(bool status);
 	CUIStatic&				get_ui_text				() const { return *m_text; }
@@ -100,6 +103,7 @@ public:
 				bool		m_has_upgrade;
 				bool		m_with_custom_text;
 				bool		m_with_custom_mark;
+				bool		m_loot_search_hide_condition = false;
 };
 
 class CUIDragItem final: public CUIWindow, public pureRender, public pureFrame
