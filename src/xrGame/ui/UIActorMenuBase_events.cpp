@@ -1054,6 +1054,11 @@ void CUIActorMenuBase::DropAllCurrentItem(u32 item_amount)
 
 void CUIActorMenuBase::TakeAllCurrentItem(u32 item_amount)
 {
+	if (!CurrentItem())
+	{
+		return;
+	}
+
 	CUIDragDropListEx* deadBodyList = GetListByType(iDeadBodyBag);
 	u32 const childCount = CurrentItem()->ChildsCount();
 	u32 const totalCount = 1 + childCount;
@@ -1062,6 +1067,11 @@ void CUIActorMenuBase::TakeAllCurrentItem(u32 item_amount)
 
 	for (u32 i = 0; i < childrenToTake; ++i)
 	{
+		if (!IsAllowTakeFromInvBox(CurrentItem()))
+		{
+			break;
+		}
+
 		CUICellItem* child_itm = CurrentItem()->PopChild(nullptr);
 		PIItem child_iitm = (PIItem)child_itm->m_pData;
 		move_item_from_to(child_iitm->parent_id(), GetInventoryOwner()->object_id(), child_iitm->object_id());
@@ -1075,6 +1085,12 @@ void CUIActorMenuBase::TakeAllCurrentItem(u32 item_amount)
 
 	if (toTake > childCount)
 	{
+		if (!IsAllowTakeFromInvBox(CurrentItem()))
+		{
+			UpdateDeadBodyBag();
+			return;
+		}
+
 		CUICellItem* parent_itm = CurrentItem();
 		PIItem parent_iitm = CurrentIItem();
 		move_item_from_to(parent_iitm->parent_id(), GetInventoryOwner()->object_id(), parent_iitm->object_id());

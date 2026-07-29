@@ -332,7 +332,7 @@ void CLootSearchSystem::InitializeSession(SSession& session, CInventoryOwner* co
 		if (twoStage)
 		{
 			cumulativeSilhouette += RandomDelay(_cfg.silhouetteAppearMin, _cfg.silhouetteAppearMax) * session.rankMult;
-			float silhouetteSec = std::min(cumulativeSilhouette * session.rankMult, effectiveMax - _cfg.delayBetweenMax * session.rankMult * 0.5f);
+			float silhouetteSec = std::min(cumulativeSilhouette, effectiveMax - _cfg.delayBetweenMax * session.rankMult * 0.5f);
 			silhouetteSec = std::max(silhouetteSec, 0.05f);
 			entry.silhouetteAtMs = session.searchStartMs + SecToMs(silhouetteSec);
 
@@ -557,9 +557,9 @@ ELootUpdateFlags CLootSearchSystem::Update(CInventoryOwner* corpse, CUIActorMenu
 			PlayRevealSound();
 		}
 
-		if (prevState == ELootItemState::Hidden &&
-			nextState == ELootItemState::Silhouette &&
-			_cfg.hideHiddenItems)
+		if (_cfg.hideHiddenItems &&
+			prevState == ELootItemState::Hidden &&
+			(nextState == ELootItemState::Silhouette || nextState == ELootItemState::Revealed))
 		{
 			flags = static_cast<ELootUpdateFlags>(static_cast<u32>(flags) | static_cast<u32>(ELootUpdateFlags::ListRefresh));
 		}
@@ -834,7 +834,7 @@ bool CLootSearchSystem::CanTakeAll(CInventoryOwner* corpse) const
 	const SSession* session = FindSession(targetId);
 	if (!session || !session->initialized)
 	{
-		return false;
+		return true;
 	}
 
 	return !SessionHasPendingItems(*session);
