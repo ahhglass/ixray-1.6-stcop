@@ -522,15 +522,22 @@ CUIDragItem* CUICellItem::CreateDragItem()
 	tmp->Init(GetShader(), r, GetUIStaticItem().GetTextureRect());
 	if (psActorFlags.test(AF_3D_ICONS_INV))
 	{
-		tmp->wnd()->SetVisual(GetVisual());
-		Fvector xyz = GetXYZ();
-		if (m_pParentList->GetVerticalPlacement())
+		IRenderVisual* visual = GetVisual();
+		tmp->wnd()->SetVisual(visual);
+		if (visual)
 		{
-			xyz.x -= deg2rad(90.f);
+			Fvector xyz = GetXYZ();
+			if (m_pParentList->GetVerticalPlacement())
+			{
+				xyz.x -= deg2rad(90.f);
+			}
+			tmp->wnd()->SetXYZ(xyz);
+			tmp->wnd()->SetScaleFactor(GetScaleFactor());
+			if (IKinematics* kinematics = visual->dcast_PKinematics())
+			{
+				tmp->wnd()->SetBonesVisible(kinematics);
+			}
 		}
-		tmp->wnd()->SetXYZ(xyz);
-		tmp->wnd()->SetScaleFactor(GetScaleFactor());
-		tmp->wnd()->SetBonesVisible(GetVisual()->dcast_PKinematics());
 	}
 	else
 	{

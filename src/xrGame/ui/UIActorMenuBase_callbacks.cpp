@@ -9,6 +9,7 @@
 #include "UIItemInfo.h"
 #include "../../xrEngine/xr_input.h"
 #include "../script_game_object.h"
+#include "../LootSearchSystem.h"
 
 bool CUIActorMenuBase::OnItemDrop(CUICellItem* itm)
 {
@@ -329,6 +330,16 @@ bool CUIActorMenuBase::OnItemFocusLost(CUICellItem* itm)
 
 bool CUIActorMenuBase::OnItemStartDrag(CUICellItem* itm)
 {
+	if (m_currMenuMode == mmDeadBodySearch && GetPartner())
+	{
+		PIItem item = itm ? static_cast<PIItem>(itm->m_pData) : nullptr;
+		if (CLootSearchSystem::Get().IsEnabled() && item &&
+			!CLootSearchSystem::Get().CanTakeItem(item, GetPartner()))
+		{
+			return true;
+		}
+	}
+
 	if (m_currMenuMode == mmTrade)
 	{
 		_tradeHoverCell = nullptr;
