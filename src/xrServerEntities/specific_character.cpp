@@ -27,6 +27,8 @@ SSpecificCharacterData::SSpecificCharacterData()
 	m_fHitProbabilityFactor	= 1.f;
 	m_crouch_type			= 0;
 	m_upgrade_mechanic		= false;
+	m_barter_trade			= false;
+	m_barter_tolerance		= -1;
 }
 
 SSpecificCharacterData::~SSpecificCharacterData()
@@ -129,6 +131,8 @@ void CSpecificCharacter::load_shared	(const char*)
 	data()->m_fHitProbabilityFactor	= pXML->ReadFlt("hit_probability_factor",0,1.f);
 	data()->m_crouch_type			= pXML->ReadInt("crouch_type",0,0);
 	data()->m_upgrade_mechanic		= ( pXML->ReadInt("mechanic_mode",0,0) == 1 );
+	data()->m_barter_trade			= ( pXML->ReadInt("barter_trade",0,0) == 1 );
+	data()->m_barter_tolerance		= pXML->ReadInt("barter_tolerance",0,-1);
 
 	data()->m_critical_wound_weights= pXML->Read("critical_wound_weights", 0, "1");
 
@@ -290,6 +294,16 @@ int CSpecificCharacter::crouch_type	() const
 bool CSpecificCharacter::upgrade_mechanic() const 
 {
 	return data()->m_upgrade_mechanic;
+}
+
+bool CSpecificCharacter::barter_trade() const
+{
+	return data()->m_barter_trade;
+}
+
+s32 CSpecificCharacter::barter_tolerance() const
+{
+	return data()->m_barter_tolerance;
 }
 
 const char* CSpecificCharacter::critical_wound_weights () const 

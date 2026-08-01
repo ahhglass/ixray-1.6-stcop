@@ -130,6 +130,16 @@ private:
 
 	const char* m_onEffectDisassemble = {};
 	bool m_isEffectDisassemble = false;
+
+	bool m_bBarterModeActive = false;
+	const char* m_onIsBarterTrade = {};
+	bool m_isBarterTrade = false;
+	const char* m_onBarterTolerance = {};
+	bool m_isBarterTolerance = false;
+
+	bool QueryBarterMode();
+	int QueryBarterTolerance();
+	static bool CanPerformBarterExchange(int actor_price, int partner_price, int tolerance);
 public:
 	void						SetMenuMode							(EMenuMode mode);
 	void						SetActor							(CInventoryOwner* io);

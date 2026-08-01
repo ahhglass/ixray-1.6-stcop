@@ -439,5 +439,7 @@ class_<CScriptGameObject> script_register_game_object1(class_<CScriptGameObject>
 		.def("SetCharacterMaxWeight",			&CScriptGameObject::SetCharacterMaxWeight)
 
 		.property("mechanic",					&CScriptGameObject::getMechanic, &CScriptGameObject::setMechanic)
+		.def("barter_trade",					&CScriptGameObject::getBarterTrade)
+		.def("barter_tolerance",				&CScriptGameObject::getBarterTolerance)
 	;
 }

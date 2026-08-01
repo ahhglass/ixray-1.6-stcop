@@ -1426,7 +1426,7 @@ bool CUIActorMenuBase::ToQuickSlotAt(CUICellItem* itm, u8 slotIndex)
 	return false;
 }
 
-void CUIActorMenuBase::TransferItems( CUIDragDropListEx* pSellList, CUIDragDropListEx* pBuyList, CTrade* pTrade, bool bBuying )
+void CUIActorMenuBase::TransferItems( CUIDragDropListEx* pSellList, CUIDragDropListEx* pBuyList, CTrade* pTrade, bool bBuying, bool bFree )
 {
 	if (!IsGameTypeSingle())
 	{
@@ -1438,7 +1438,7 @@ void CUIActorMenuBase::TransferItems( CUIDragDropListEx* pSellList, CUIDragDropL
 	{
 		CUICellItem* cell_item = pSellList->RemoveItem( pSellList->GetItemIdx(0), false );
 		PIItem item = (PIItem)cell_item->m_pData;
-		pTrade->TransferItem( item, bBuying );
+		pTrade->TransferItem( item, bBuying, bFree );
 		
 		if ( bBuying )
 		{

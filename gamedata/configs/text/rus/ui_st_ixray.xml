@@ -885,4 +885,13 @@
 	<string id="ui_mm_gamepad_vibration">
 		<text>Вибрация</text>
 	</string>
+	<string id="ui_st_barter">
+		<text>Обменяться</text>
+	</string>
+	<string id="ui_st_barter_hint">
+		<text>Обменяться вещами со сталкером</text>
+	</string>
+	<string id="barter_price_mismatch">
+		<text>Ваши предметы недостаточно ценны для этого обмена</text>
+	</string>
 </string_table>

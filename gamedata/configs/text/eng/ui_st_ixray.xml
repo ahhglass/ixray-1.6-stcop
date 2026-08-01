@@ -885,4 +885,13 @@
 	<string id="ui_mm_gamepad_vibration">
 		<text>Vibration</text>
 	</string>
+	<string id="ui_st_barter">
+		<text>Exchange</text>
+	</string>
+	<string id="ui_st_barter_hint">
+		<text>Exchange with stalker</text>
+	</string>
+	<string id="barter_price_mismatch">
+		<text>Your items are not valuable enough for this exchange</text>
+	</string>
 </string_table>

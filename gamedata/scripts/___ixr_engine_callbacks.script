@@ -207,3 +207,11 @@ end
 function load_screen_press_any_key()
 	SendScriptCallback("on_load_screen_await_any_key_pressed")
 end
+
+function CUIActorMenu_IsBarterTrade(partner_id)
+	return trade_barter.engine_is_barter_trade(partner_id)
+end
+
+function CUIActorMenu_GetBarterTolerance(partner_id)
+	return trade_barter.engine_get_barter_tolerance(partner_id)
+end

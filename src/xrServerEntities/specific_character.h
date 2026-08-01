@@ -44,6 +44,8 @@ struct SSpecificCharacterData : CSharedResource
 	float		m_fHitProbabilityFactor;
 	int			m_crouch_type;
 	mutable bool m_upgrade_mechanic;
+	bool		m_barter_trade;
+	s32			m_barter_tolerance;
 
 	xr_string	m_critical_wound_weights;
 #endif
@@ -157,6 +159,8 @@ public:
 	float						hit_probability_factor	() const ;
 	int							crouch_type				() const ;
 	bool						upgrade_mechanic		() const ;
+	bool						barter_trade			() const ;
+	s32							barter_tolerance		() const ;
 	const char*						critical_wound_weights	() const ;
 
 	const shared_str&			IconName				() const	{return data()->m_icon_name;};

@@ -841,6 +841,8 @@ public:
 			const bool			getMechanic								() const;
 			void SetHeadRotate(bool value);
 			void				setMechanic								(bool cond);
+			const bool			getBarterTrade							() const;
+			const int			getBarterTolerance						() const;
 
 			void				SetSubIconText(const char* m_custom_text, int item_custom_text_clr_inv, const char* item_custom_text_font, Fvector2 m_custom_text_offset);
 			void				SetSubIcon(bool m_custom_mark, Fvector2 m_custom_mark_offset, Fvector2 m_custom_mark_size, const char* m_custom_mark_texture, int m_custom_mark_clr);

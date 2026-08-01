@@ -1899,6 +1899,30 @@ const bool CScriptGameObject::getMechanic() const
 	return invOwn->SpecificCharacter().upgrade_mechanic();
 }
 
+const bool CScriptGameObject::getBarterTrade() const
+{
+	const CInventoryOwner* invOwn = this->object().cast_inventory_owner();
+
+	if (invOwn == nullptr)
+	{
+		return false;
+	}
+
+	return invOwn->SpecificCharacter().barter_trade();
+}
+
+const int CScriptGameObject::getBarterTolerance() const
+{
+	const CInventoryOwner* invOwn = this->object().cast_inventory_owner();
+
+	if (invOwn == nullptr)
+	{
+		return -1;
+	}
+
+	return invOwn->SpecificCharacter().barter_tolerance();
+}
+
 
 void CScriptGameObject::SetHeadRotate(bool value)
 {

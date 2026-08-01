@@ -190,7 +190,7 @@ protected:
 	
 	void						BindDragDropListEvents		(CUIDragDropListEx* lst);
 
-	void						TransferItems				(CUIDragDropListEx* pSellList, CUIDragDropListEx* pBuyList, CTrade* pTrade, bool bBuying);
+	void						TransferItems				(CUIDragDropListEx* pSellList, CUIDragDropListEx* pBuyList, CTrade* pTrade, bool bBuying, bool bFree = false);
 	void						TransferItemsMp				(CUIDragDropListEx* pSellList, CUIDragDropListEx* pBuyList, CTrade* pTrade, bool bBuying);
 
 	xr_vector<EDDListType>		m_allowed_drops				[iListTypeMax];

@@ -1,0 +1,107 @@
+
+--[[
+	Barter trade module
+	Script: trade_barter.script
+	Description: Item-for-item barter for NPCs with barter_trade flag in character_desc XML
+]]
+
+local DEFAULT_TOLERANCE = 50
+
+local barter_session = {
+	active = false,
+	partner_id = nil,
+}
+
+function on_game_start()
+	RegisterScriptCallback("on_actor_trade_wnd_opened", on_trade_opened)
+	RegisterScriptCallback("on_actor_trade_wnd_closed", on_trade_closed)
+end
+
+function on_trade_opened(mode)
+	if mode ~= 2 then
+		return
+	end
+
+	local partner_id = GetRegistryValue("used_npc_id")
+	if not partner_id then
+		return
+	end
+
+	local partner = get_partner_gobj(partner_id)
+	if is_barter_partner(partner) then
+		barter_session.active = true
+		barter_session.partner_id = partner_id
+	end
+end
+
+function on_trade_closed(mode)
+	if mode == 2 then
+		barter_session.active = false
+		barter_session.partner_id = nil
+	end
+end
+
+function get_partner_gobj(partner_id)
+	if not partner_id then
+		return nil
+	end
+
+	local st = db.storage[partner_id]
+	if st and st.object then
+		return st.object
+	end
+
+	if level and level.object_by_id then
+		return level.object_by_id(partner_id)
+	end
+
+	return nil
+end
+
+function is_barter_partner(partner_gobj)
+	if not partner_gobj or not partner_gobj:alive() then
+		return false
+	end
+
+	return partner_gobj:barter_trade()
+end
+
+function get_tolerance(partner_gobj)
+	if not partner_gobj then
+		return DEFAULT_TOLERANCE
+	end
+
+	local tol = partner_gobj:barter_tolerance()
+	if tol and tol >= 0 then
+		return tol
+	end
+
+	return DEFAULT_TOLERANCE
+end
+
+-- actor offer must cover partner ask; overpay is allowed, slight underpay within tolerance
+function can_exchange(actor_price, partner_price, tolerance)
+	if actor_price <= 0 or partner_price <= 0 then
+		return false
+	end
+
+	return actor_price + tolerance >= partner_price
+end
+
+function engine_is_barter_trade(partner_id)
+	local partner = get_partner_gobj(partner_id)
+	return is_barter_partner(partner)
+end
+
+function engine_get_barter_tolerance(partner_id)
+	local partner = get_partner_gobj(partner_id)
+	if not partner then
+		return DEFAULT_TOLERANCE
+	end
+
+	return get_tolerance(partner)
+end
+
+function engine_on_barter_performed(partner_id, actor_price, partner_price)
+	SendScriptCallback("trade_barter_on_performed", partner_id, actor_price, partner_price)
+end

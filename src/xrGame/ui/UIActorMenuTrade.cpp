@@ -3,6 +3,7 @@
 #include "pch_script.h"
 #include "UIActorMenu.h"
 #include "../../xrUI/Widgets/UI3tButton.h"
+#include "../../xrUI/Widgets/UIButton.h"
 #include "UIDragDropListEx.h"
 #include "UIDragDropReferenceList.h"
 #include "UICharacterInfo.h"
@@ -29,8 +30,73 @@
 #include "Car.h"
 #include "../../xrUI/Widgets/UIProgressBar.h"
 #include "../InventoryVolumeSystem.h"
+#include "../ai_space.h"
 
 bool is_item_in_list(CUIDragDropListEx* pList, PIItem item);
+
+bool CUIActorMenu::QueryBarterMode()
+{
+	if (!m_pPartnerInvOwner)
+	{
+		return false;
+	}
+
+	const u16 partner_id = m_pPartnerInvOwner->object_id();
+
+	if (m_isBarterTrade)
+	{
+		luabind::functor<bool> funct;
+		if (ai().script_engine().functor(m_onIsBarterTrade, funct))
+		{
+			return funct(partner_id);
+		}
+	}
+
+	return m_pPartnerInvOwner->SpecificCharacter().barter_trade();
+}
+
+int CUIActorMenu::QueryBarterTolerance()
+{
+	if (!m_pPartnerInvOwner)
+	{
+		return 50;
+	}
+
+	const u16 partner_id = m_pPartnerInvOwner->object_id();
+
+	if (m_isBarterTolerance)
+	{
+		luabind::functor<int> funct;
+		if (ai().script_engine().functor(m_onBarterTolerance, funct))
+		{
+			const int tolerance = funct(partner_id);
+			if (tolerance >= 0)
+			{
+				return tolerance;
+			}
+		}
+	}
+
+	const s32 profile_tolerance = m_pPartnerInvOwner->SpecificCharacter().barter_tolerance();
+	if (profile_tolerance >= 0)
+	{
+		return profile_tolerance;
+	}
+
+	return 50;
+}
+
+bool CUIActorMenu::CanPerformBarterExchange(int actor_price, int partner_price, int tolerance)
+{
+	if (actor_price <= 0 || partner_price <= 0)
+	{
+		return false;
+	}
+
+	// Actor may offer more value than requested; slight underpay is allowed within tolerance.
+	return actor_price + tolerance >= partner_price;
+}
+
 // -------------------------------------------------
 
 void CUIActorMenu::InitTradeMode()
@@ -80,6 +146,20 @@ void CUIActorMenu::InitTradeMode()
 	VERIFY							( m_partner_trade );
 	m_actor_trade->StartTradeEx		( m_pPartnerInvOwner );
 	m_partner_trade->StartTradeEx	( m_pActorInvOwner );
+
+	m_bBarterModeActive = QueryBarterMode();
+	if (m_bBarterModeActive)
+	{
+		if (m_trade_buy_button)
+		{
+			m_trade_buy_button->Show(false);
+		}
+		if (m_trade_sell_button)
+		{
+			m_trade_sell_button->SetTextST("ui_st_barter");
+			m_trade_sell_button->m_hint_text = g_pStringTable->translate("ui_st_barter_hint");
+		}
+	}
 
 	UpdatePrices();
 
@@ -163,6 +243,16 @@ void CUIActorMenu::DeInitTradeMode()
 		m_trade_buy_button->Show(false);
 	if (m_trade_sell_button)
 		m_trade_sell_button->Show(false);
+
+	if (m_bBarterModeActive)
+	{
+		if (m_trade_sell_button)
+		{
+			m_trade_sell_button->SetTextST("ui_st_sell");
+			m_trade_sell_button->m_hint_text = g_pStringTable->translate("ui_st_sell_hint");
+		}
+		m_bBarterModeActive = false;
+	}
 
 	if (!CurrentGameUI())
 		return;
@@ -350,14 +440,41 @@ void CUIActorMenu::UpdatePrices()
 		m_trade_button->Enable(has_actor_items || has_partner_items);
 
 	if (m_trade_buy_button)
-		m_trade_buy_button->Enable(has_partner_items);
+	{
+		if (m_bBarterModeActive)
+		{
+			m_trade_buy_button->Show(false);
+			m_trade_buy_button->Enable(false);
+		}
+		else
+		{
+			m_trade_buy_button->Enable(has_partner_items);
+		}
+	}
 
 	if (m_trade_sell_button)
-		m_trade_sell_button->Enable(has_actor_items);	
+	{
+		if (m_bBarterModeActive)
+		{
+			const int tolerance = QueryBarterTolerance();
+			const bool can_exchange = has_actor_items && has_partner_items
+				&& CanPerformBarterExchange((int)actor_price, (int)partner_price, tolerance);
+			m_trade_sell_button->Enable(can_exchange);
+		}
+		else
+		{
+			m_trade_sell_button->Enable(has_actor_items);
+		}
+	}
 }
 
 void CUIActorMenu::OnBtnPerformTradeBuy(CUIWindow* w, void* d)
 {
+	if (m_bBarterModeActive)
+	{
+		return;
+	}
+
 	if(m_pTradePartnerList->ItemsCount()==0) 
 	{
 		return;
@@ -408,6 +525,41 @@ void CUIActorMenu::OnBtnPerformTradeBuy(CUIWindow* w, void* d)
 
 void CUIActorMenu::OnBtnPerformTradeSell(CUIWindow* w, void* d)
 {
+	if (m_bBarterModeActive)
+	{
+		if (m_pTradeActorList->ItemsCount() == 0 || m_pTradePartnerList->ItemsCount() == 0)
+		{
+			return;
+		}
+
+		const int actor_price = (int)CalcItemsPrice(m_pTradeActorList, m_partner_trade, true);
+		const int partner_price = (int)CalcItemsPrice(m_pTradePartnerList, m_partner_trade, false);
+		const int tolerance = QueryBarterTolerance();
+
+		if (!CanPerformBarterExchange(actor_price, partner_price, tolerance))
+		{
+			CallMessageBoxOK("barter_price_mismatch");
+			return;
+		}
+
+		m_partner_trade->OnPerformTrade(0, 0);
+
+		TransferItems(m_pTradeActorList, m_pTradePartnerBagList, m_partner_trade, true, true);
+		TransferItems(m_pTradePartnerList, m_pTradeActorBagList, m_partner_trade, false, true);
+
+		if (pInput->GetControllerMode())
+		{
+			SetCurrentItem(nullptr);
+		}
+		if (!pInput->GetControllerMode())
+		{
+			SetCurrentItem(nullptr);
+		}
+
+		UpdateItemsPlace();
+		return;
+	}
+
 	if (m_pTradeActorList->ItemsCount() == 0)
 	{
 		return;
