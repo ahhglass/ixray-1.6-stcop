@@ -824,6 +824,8 @@ void CUIActorMenuBase::UpdateDeadBodyBagList()
 		CUICellItem* itm = create_cell_item(item);
 		GetPartnerList()->SetItem(itm);
 	}
+
+	UpdateDeadBodyBag();
 }
 
 void CUIActorMenuBase::UpdateItemsPlace()
