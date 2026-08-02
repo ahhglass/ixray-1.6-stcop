@@ -9,6 +9,7 @@
 #include "StdAfx.h"
 #include "pch_script.h"
 #include "inventory_item.h"
+#include "trade_item_cost.h"
 #include "inventory_item_impl.h"
 #include "PhysicsShellHolder.h"
 #include "Level.h"
@@ -142,7 +143,12 @@ void CInventoryItem::Load(const char* section)
 	m_weight = pSettings->r_float(section, "inv_weight");
 	R_ASSERT(m_weight >= 0.f);
 
-	m_cost = pSettings->r_u32(section, "cost");
+	m_cost = READ_IF_EXISTS(pSettings, r_u32, section, "cost", 0);
+	m_cost_items.clear();
+	if (LPCSTR cost_items_str = READ_IF_EXISTS(pSettings, r_string, section, "cost_items", nullptr))
+	{
+		CTradeItemCostService::ParseCostItemsFromString(cost_items_str, m_cost_items);
+	}
 	u32 sl = READ_IF_EXISTS(pSettings, r_u32, section, "slot", -1);
 	m_ItemCurrPlace.base_slot_id = (sl == -1) ? 0 : (sl + 1);
 

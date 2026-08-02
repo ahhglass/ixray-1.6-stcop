@@ -1,0 +1,106 @@
+--[[
+	Alternative item payment in trade (cost_items)
+	Script: trade_item_cost.script
+]]
+
+function on_game_start()
+	RegisterScriptCallback("on_actor_trade_wnd_opened", on_trade_opened)
+	RegisterScriptCallback("on_actor_trade_wnd_closed", on_trade_closed)
+end
+
+local cost_session = {
+	active = false,
+	partner_id = nil,
+}
+
+function on_trade_opened(mode)
+	if mode ~= 2 then
+		return
+	end
+
+	local partner_id = GetRegistryValue("used_npc_id")
+	if not partner_id then
+		return
+	end
+
+	cost_session.active = true
+	cost_session.partner_id = partner_id
+end
+
+function on_trade_closed(mode)
+	if mode == 2 then
+		cost_session.active = false
+		cost_session.partner_id = nil
+	end
+end
+
+function get_partner_gobj(partner_id)
+	local st = db.storage[partner_id]
+	if st and st.object then
+		return st.object
+	end
+
+	if level and level.object_by_id then
+		return level.object_by_id(partner_id)
+	end
+
+	return nil
+end
+
+function get_partner_trade_ini(partner_id)
+	local partner = get_partner_gobj(partner_id)
+	if not partner then
+		return nil
+	end
+
+	local section = partner:section()
+	local trade_path = utils.cfg_get_string(system_ini(), section, "trade", partner, false, "", "misc\\trade\\trade_generic.ltx")
+	if not trade_path or trade_path == "" then
+		return nil
+	end
+
+	return ini_file(trade_path)
+end
+
+function get_effective_cost_items(partner_id, item_section)
+	local ini = get_partner_trade_ini(partner_id)
+	if not ini then
+		return nil
+	end
+
+	if not ini:section_exist("trader_alt_costs") then
+		return nil
+	end
+
+	if not ini:line_exist("trader_alt_costs", item_section) then
+		return nil
+	end
+
+	return ini:r_string("trader_alt_costs", item_section)
+end
+
+function engine_trader_uses_alt_cost(partner_id)
+	local partner = get_partner_gobj(partner_id)
+	if partner and partner:alt_item_cost() then
+		return true
+	end
+
+	local ini = get_partner_trade_ini(partner_id)
+	if ini and ini:section_exist("trader") and ini:line_exist("trader", "alt_item_cost") then
+		local val = ini:r_string("trader", "alt_item_cost")
+		if val == "true" or val == "1" then
+			return true
+		end
+	end
+
+	return false
+end
+
+function engine_resolve_cost_items(partner_id, item_section)
+	local override = get_effective_cost_items(partner_id, item_section)
+	if override then
+		return override
+	end
+
+	return ""
+end

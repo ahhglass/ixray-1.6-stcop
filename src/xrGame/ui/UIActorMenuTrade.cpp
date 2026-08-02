@@ -10,6 +10,7 @@
 #include "../../xrUI/Widgets/UIFrameLineWnd.h"
 #include "UICellItem.h"
 #include "UIInventoryUtilities.h"
+#include "ui_alt_cost_row.h"
 #include "UICellItemFactory.h"
 #include "../../xrEngine/xr_input.h"
 #include "../InventoryOwner.h"
@@ -31,6 +32,8 @@
 #include "../../xrUI/Widgets/UIProgressBar.h"
 #include "../InventoryVolumeSystem.h"
 #include "../ai_space.h"
+#include "../trade_item_cost.h"
+#include "../../xrUI/Widgets/UIWindow.h"
 
 bool is_item_in_list(CUIDragDropListEx* pList, PIItem item);
 
@@ -84,6 +87,102 @@ int CUIActorMenu::QueryBarterTolerance()
 	}
 
 	return 50;
+}
+
+bool CUIActorMenu::QueryTraderUsesAltCost()
+{
+	if (!m_pPartnerInvOwner)
+	{
+		return false;
+	}
+
+	if (m_pPartnerInvOwner->SpecificCharacter().alt_item_cost())
+	{
+		return true;
+	}
+
+	const u16 partner_id = m_pPartnerInvOwner->object_id();
+
+	if (m_isTraderUsesAltCost)
+	{
+		luabind::functor<bool> funct;
+		if (ai().script_engine().functor(m_onTraderUsesAltCost, funct))
+		{
+			return funct(partner_id);
+		}
+	}
+
+	return false;
+}
+
+LPCSTR CUIActorMenu::QueryResolveCostItems(LPCSTR section)
+{
+	if (!m_pPartnerInvOwner || !section || !section[0])
+	{
+		return nullptr;
+	}
+
+	if (!m_isResolveCostItems)
+	{
+		return nullptr;
+	}
+
+	luabind::functor<const char*> funct;
+	if (!ai().script_engine().functor(m_onResolveCostItems, funct))
+	{
+		return nullptr;
+	}
+
+	const char* result = funct(m_pPartnerInvOwner->object_id(), section);
+	if (!result || !result[0])
+	{
+		return nullptr;
+	}
+
+	static shared_str s_resolve_cache;
+	s_resolve_cache = result;
+	return s_resolve_cache.c_str();
+}
+
+void CUIActorMenu::CollectPartnerBuyRequirements(STradeBuyRequirements& total)
+{
+	total.Clear();
+
+	if (!QueryTraderUsesAltCost() || !m_pTradePartnerList || !m_partner_trade)
+	{
+		return;
+	}
+
+	const bool trader_uses_alt = true;
+
+	auto process_item = [&](PIItem item)
+	{
+		if (!item)
+		{
+			return;
+		}
+
+		LPCSTR override_str = QueryResolveCostItems(item->m_section_id.c_str());
+
+		STradeBuyRequirements req;
+		CTradeItemCostService::BuildBuyRequirements(item, m_partner_trade, false, trader_uses_alt, override_str, req);
+		CTradeItemCostService::AggregateRequirements(req, total);
+	};
+
+	for (u16 i = 0; i < m_pTradePartnerList->ItemsCount(); ++i)
+	{
+		CUICellItem* cell = m_pTradePartnerList->GetItemIdx(i);
+		if (!cell)
+		{
+			continue;
+		}
+
+		process_item((PIItem)cell->m_pData);
+		for (u16 j = 0; j < cell->ChildsCount(); ++j)
+		{
+			process_item((PIItem)cell->Child(j)->m_pData);
+		}
+	}
 }
 
 bool CUIActorMenu::CanPerformBarterExchange(int actor_price, int partner_price, int tolerance)
@@ -410,9 +509,40 @@ void CUIActorMenu::UpdatePrices()
 	u32 actor_price   = CalcItemsPrice( m_pTradeActorList,   m_partner_trade, true  );
 	u32 partner_price = CalcItemsPrice( m_pTradePartnerList, m_partner_trade, false );
 
+	STradeBuyRequirements buy_payment;
+	CollectPartnerBuyRequirements(buy_payment);
+
+	u32 partner_money_display = partner_price;
+	if (buy_payment.has_item_cost)
+	{
+		partner_money_display = buy_payment.money_ru;
+	}
+
 	string64 buf;
 	xr_sprintf( buf, "%d RU", actor_price );		m_ActorTradePrice->SetText( buf );	m_ActorTradePrice->AdjustWidthToText();
-	xr_sprintf( buf, "%d RU", partner_price );	m_PartnerTradePrice->SetText( buf );	m_PartnerTradePrice->AdjustWidthToText();
+	if (partner_money_display > 0 || !buy_payment.has_item_cost)
+	{
+		xr_sprintf(buf, "%d RU", partner_money_display);
+		m_PartnerTradePrice->SetText(buf);
+		m_PartnerTradePrice->AdjustWidthToText();
+		m_PartnerTradePrice->Show(true);
+	}
+	else
+	{
+		m_PartnerTradePrice->SetText("");
+		m_PartnerTradePrice->Show(false);
+	}
+
+	if (m_PartnerTradeAltCostRow)
+	{
+		CGameFont* font = m_PartnerTradePrice ? m_PartnerTradePrice->GetFont() : nullptr;
+		CUIAltCostRowHelper::Update(
+			m_PartnerTradeAltCostRow,
+			m_PartnerAltCostSlots,
+			buy_payment,
+			m_PartnerAltCostLayout,
+			font);
+	}
 
 	float actor_weight   = CalcItemsWeight( m_pTradeActorList );
 	float partner_weight = CalcItemsWeight( m_pTradePartnerList );
@@ -448,7 +578,17 @@ void CUIActorMenu::UpdatePrices()
 		}
 		else
 		{
-			m_trade_buy_button->Enable(has_partner_items);
+			bool can_buy = has_partner_items;
+			if (can_buy && QueryTraderUsesAltCost())
+			{
+				STradeBuyRequirements buy_payment;
+				CollectPartnerBuyRequirements(buy_payment);
+				if (buy_payment.has_item_cost || buy_payment.money_ru > 0)
+				{
+					can_buy = CTradeItemCostService::CanAfford(m_pActorInvOwner, buy_payment);
+				}
+			}
+			m_trade_buy_button->Enable(can_buy);
 		}
 	}
 
@@ -482,8 +622,29 @@ void CUIActorMenu::OnBtnPerformTradeBuy(CUIWindow* w, void* d)
 
 	int actor_money    = (int)m_pActorInvOwner->get_money();
 	int partner_money  = (int)m_pPartnerInvOwner->get_money();
-	int actor_price    = 0;//(int)CalcItemsPrice( m_pTradeActorList,   m_partner_trade, true  );
-	int partner_price  = (int)CalcItemsPrice( m_pTradePartnerList, m_partner_trade, false );
+	int actor_price    = 0;
+	int partner_price  = 0;
+
+	STradeBuyRequirements buy_payment;
+	if (QueryTraderUsesAltCost())
+	{
+		CollectPartnerBuyRequirements(buy_payment);
+		partner_price = (int)buy_payment.money_ru;
+	}
+	else
+	{
+		partner_price = (int)CalcItemsPrice(m_pTradePartnerList, m_partner_trade, false);
+	}
+
+	if (buy_payment.has_item_cost && !CTradeItemCostService::CanAfford(m_pActorInvOwner, buy_payment))
+	{
+		CallMessageBoxOK("trade_item_cost_missing");
+		if (!pInput->GetControllerMode())
+		{
+			SetCurrentItem(nullptr);
+		}
+		return;
+	}
 
 	int delta_price    = actor_price - partner_price;
 	actor_money        += delta_price;
@@ -491,6 +652,19 @@ void CUIActorMenu::OnBtnPerformTradeBuy(CUIWindow* w, void* d)
 
 	if ( ( actor_money >= 0 ) /*&& ( partner_money >= 0 )*/ && ( actor_price >= 0 || partner_price > 0 ) )
 	{
+		if (buy_payment.has_item_cost)
+		{
+			if (!CTradeItemCostService::ConsumeItems(m_pActorInvOwner, buy_payment))
+			{
+				CallMessageBoxOK("trade_item_cost_missing");
+				if (!pInput->GetControllerMode())
+				{
+					SetCurrentItem(nullptr);
+				}
+				return;
+			}
+		}
+
 		m_partner_trade->OnPerformTrade( partner_price, actor_price );
 
 //		TransferItems( m_pTradeActorList,   m_pTradePartnerBagList, m_partner_trade, true );

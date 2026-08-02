@@ -14,6 +14,7 @@
 #include "xrServer_Objects_ALife.h"
 #include "xrServer_Objects_ALife_Items.h"
 #include "../xrScripts/script_export_space.h"
+#include "trade_item_cost.h"
 
 enum EHandDependence {
 	hdNone = 0,
@@ -169,6 +170,7 @@ public:
 
 	bool IsQuestItem() const { return m_flags.test(FIsQuestItem); }
 	virtual	u32 Cost() const { return m_cost; }
+	const xr_vector<STradeItemCostEntry>& GetCostItems() const { return m_cost_items; }
 	void setCost(u32 nValue);
 
 	virtual float Weight() const { return m_weight; }
@@ -258,6 +260,7 @@ public:
 	virtual bool IsNecessaryItem(const shared_str& item_sect) { return false; };
 protected:
 	u32 m_cost = 0;
+	xr_vector<STradeItemCostEntry> m_cost_items;
 	float m_weight = 0.0f;
 	float m_fCondition = 1.0f;
 	shared_str m_Description;

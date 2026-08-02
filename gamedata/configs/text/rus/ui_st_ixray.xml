@@ -894,4 +894,7 @@
 	<string id="barter_price_mismatch">
 		<text>Ваши предметы недостаточно ценны для этого обмена</text>
 	</string>
+	<string id="trade_item_cost_missing">
+		<text>У вас недостаточно предметов или денег для покупки</text>
+	</string>
 </string_table>

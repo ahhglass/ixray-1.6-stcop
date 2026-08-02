@@ -1,5 +1,6 @@
 #pragma once
 #include "../../xrUI/Widgets/UIWindow.h"
+#include "ui_alt_cost_row.h"
 
 
 class CInventoryItem;
@@ -17,6 +18,7 @@ class CUIOutfitInfo;
 class CUIBoosterInfo;
 class CUICellItem;
 class CUIGrenadeParams;
+struct STradeBuyRequirements;
 
 extern const char * const 		fieldsCaptionColor;
 
@@ -38,7 +40,7 @@ public:
 	CInventoryItem*		CurrentItem			() const {return m_pInvItem;}
 	void				InitItemInfo		(Fvector2 pos, Fvector2 size, const char* xml_name);
 	bool				InitItemInfo		(const char* xml_name);
-	void				InitItem			(CUICellItem* pCellItem, CInventoryItem* pCompareItem = NULL, u32 item_price=u32(-1), const char* trade_tip=NULL, bool overrideCorrectionByWeight = false);
+	void				InitItem			(CUICellItem* pCellItem, CInventoryItem* pCompareItem = NULL, u32 item_price=u32(-1), const char* trade_tip=NULL, bool overrideCorrectionByWeight = false, const STradeBuyRequirements* alt_cost = nullptr, bool show_alt_cost = false);
 
 
 	void				TryAddConditionInfo	(CInventoryItem& pInvItem, CInventoryItem* pCompareItem);
@@ -52,6 +54,9 @@ public:
 	void				ScrollDown			();
 	void				ScrollUp			();
 
+	void				UpdateAltCostDisplay(const STradeBuyRequirements* alt_cost, bool show_alt_cost, u32 item_price, Fvector2& pos);
+	void				AlignUICostToBase();
+
 	virtual CUIWindow* ui_cast_window() { return this; }
 
 	virtual void		Draw				();
@@ -62,6 +67,9 @@ public:
 	CUIStatic*			UIName;
 	CUIStatic*			UIWeight;
 	CUIStatic*			UICost;
+	CUIWindow*			UIAltCostRow;
+	SAltCostRowLayout	m_AltCostLayout;
+	xr_vector<SAltCostIconSlot> m_AltCostSlots;
 	CUIStatic*			UITradeTip;
 //	CUIStatic*			UIDesc_line;
 	CUIScrollView*		UIDesc;
@@ -84,4 +92,7 @@ public:
 
 	Fvector2			UIItemImageSize; 
 	CUI3dStatic*		UIItemImage;
+
+	Fvector2			m_UICostBasePos;
+	float				m_UICostRightEdge = 0.f;
 };

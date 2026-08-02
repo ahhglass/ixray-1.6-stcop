@@ -16,6 +16,9 @@
 		<text font="letterica18" align="r" r="210" g="210" b="210"/>
 	</static_cost>
 
+	<!-- Alt cost: [icon xN] groups. Position via x/y; tune icon_size, item_gap, count_offset_y -->
+	<alt_cost_row x="120" y="40" width="110" height="24" icon_size="18" item_gap="4" count_offset_y="-7"/>
+
 	<static_no_trade x="16" y="60" width="320" height="20">
 		<text align="l" font="letterica16" r="196" g="18" b="18" complex_mode="1"/>
 	</static_no_trade>

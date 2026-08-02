@@ -894,4 +894,7 @@
 	<string id="barter_price_mismatch">
 		<text>Your items are not valuable enough for this exchange</text>
 	</string>
+	<string id="trade_item_cost_missing">
+		<text>You do not have the required items or money for this purchase</text>
+	</string>
 </string_table>

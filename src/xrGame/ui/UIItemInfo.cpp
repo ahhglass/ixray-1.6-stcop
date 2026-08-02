@@ -16,6 +16,7 @@
 #include "../../xrEngine/string_table.h"
 #include "../inventory_item.h"
 #include "UIInventoryUtilities.h"
+#include "ui_alt_cost_row.h"
 #include "../PhysicsShellHolder.h"
 #include "UIWpnParams.h"
 #include "UIKnifeParams.h"
@@ -29,6 +30,8 @@
 #include "../eatable_item.h"
 #include "UICellItem.h"
 #include "UIGrenadeParams.h"
+#include "../trade_item_cost.h"
+#include "../../xrUI/Widgets/UIWindow.h"
 
 extern const char* g_inventory_upgrade_xml;
 
@@ -40,6 +43,7 @@ CUIItemInfo::CUIItemInfo()
 	UIItemImageSize.set			(0.0f,0.0f);
 	
 	UICost						= nullptr;
+	UIAltCostRow				= nullptr;
 	UITradeTip					= nullptr;
 	UIWeight					= nullptr;
 	UIItemImage					= nullptr;
@@ -61,6 +65,8 @@ CUIItemInfo::CUIItemInfo()
 	m_pInvItem					= nullptr;
 	m_b_FitToHeight				= false;
 	m_complex_desc				= false;
+	m_UICostBasePos.set			(0.f, 0.f);
+	m_UICostRightEdge			= 0.f;
 }
 
 CUIItemInfo::~CUIItemInfo()
@@ -131,6 +137,19 @@ bool CUIItemInfo::InitItemInfo(const char* xml_name)
 		AttachChild				(UICost);
 		UICost->SetAutoDelete	(true);
 		xml_init.InitStatic		(uiXml, "static_cost", 0,			UICost);
+		m_UICostBasePos			= UICost->GetWndPos();
+		m_UICostRightEdge		= m_UICostBasePos.x + UICost->GetWidth();
+	}
+
+	if (uiXml.NavigateToNode("alt_cost_row", 0) || uiXml.NavigateToNode("alt_cost_wnd", 0))
+	{
+		LPCSTR alt_cost_node = uiXml.NavigateToNode("alt_cost_row", 0) ? "alt_cost_row" : "alt_cost_wnd";
+		UIAltCostRow			= new CUIWindow();
+		AttachChild				(UIAltCostRow);
+		UIAltCostRow->SetAutoDelete(true);
+		xml_init.InitWindow		(uiXml, alt_cost_node, 0, UIAltCostRow);
+		m_AltCostLayout.LoadFromXml(uiXml, alt_cost_node, 0);
+		UIAltCostRow->Show(false);
 	}
 	
 	if(uiXml.NavigateToNode("static_condition",0)) // for SoC
@@ -233,11 +252,15 @@ void CUIItemInfo::InitItemInfo(Fvector2 pos, Fvector2 size, const char* xml_name
 
 bool	IsGameTypeSingle();
 
-void CUIItemInfo::InitItem(CUICellItem* pCellItem, CInventoryItem* pCompareItem, u32 item_price, const char* trade_tip, bool overrideCorrectionByWeight)
+void CUIItemInfo::InitItem(CUICellItem* pCellItem, CInventoryItem* pCompareItem, u32 item_price, const char* trade_tip, bool overrideCorrectionByWeight, const STradeBuyRequirements* alt_cost, bool show_alt_cost)
 {
 	if(!pCellItem)
 	{
 		m_pInvItem			= nullptr;
+		if (UIAltCostRow)
+		{
+			UIAltCostRow->Show(false);
+		}
 		Enable				(false);
 		return;
 	}
@@ -294,13 +317,27 @@ void CUIItemInfo::InitItem(CUICellItem* pCellItem, CInventoryItem* pCompareItem,
 
 	if (UICost)
 	{
-		if (IsGameTypeSingleCompatible() && item_price != u32(-1) && pInvItem->IsDrawCost())
+		const bool use_alt_cost = show_alt_cost && alt_cost && alt_cost->has_item_cost;
+		if (IsGameTypeSingleCompatible() && item_price != u32(-1) && pInvItem->IsDrawCost() && !use_alt_cost)
 		{
 			xr_sprintf(str, "%d RU", item_price);// will be owerwritten in multiplayer
 			UICost->SetText(str);
-			pos.x = UICost->GetWndPos().x;
+			AlignUICostToBase();
 			if (m_complex_desc)
 			{
+				pos.x = UICost->GetWndPos().x;
+				UICost->SetWndPos(pos);
+			}
+			UICost->Show(true);
+		}
+		else if (use_alt_cost && alt_cost->money_ru > 0)
+		{
+			xr_sprintf(str, "%d RU", alt_cost->money_ru);
+			UICost->SetText(str);
+			AlignUICostToBase();
+			if (m_complex_desc)
+			{
+				pos.x = UICost->GetWndPos().x;
 				UICost->SetWndPos(pos);
 			}
 			UICost->Show(true);
@@ -310,6 +347,8 @@ void CUIItemInfo::InitItem(CUICellItem* pCellItem, CInventoryItem* pCompareItem,
 			UICost->Show(false);
 		}
 	}
+
+	UpdateAltCostDisplay(alt_cost, show_alt_cost, item_price, pos);
 
 	if (UICondProgresBar)
 	{
@@ -522,6 +561,49 @@ void CUIItemInfo::TryAddBoosterInfo(CInventoryItem& pInvItem)
 		UIBoosterInfo->SetInfo(pInvItem.object().cNameSect());
 		UIDesc->AddWindow(UIBoosterInfo, false);
 	}
+}
+
+void CUIItemInfo::AlignUICostToBase()
+{
+	if (!UICost)
+	{
+		return;
+	}
+
+	UICost->AdjustWidthToText();
+	if (m_complex_desc)
+	{
+		return;
+	}
+
+	Fvector2 cost_pos;
+	cost_pos.x = m_UICostRightEdge - UICost->GetWndSize().x;
+	cost_pos.y = m_UICostBasePos.y;
+	UICost->SetWndPos(cost_pos);
+}
+
+void CUIItemInfo::UpdateAltCostDisplay(const STradeBuyRequirements* alt_cost, bool show_alt_cost, u32 item_price, Fvector2& pos)
+{
+	item_price;
+	pos;
+
+	const bool visible = show_alt_cost && alt_cost && alt_cost->has_item_cost;
+	if (!UIAltCostRow)
+	{
+		return;
+	}
+
+	if (!visible)
+	{
+		UIAltCostRow->Show(false);
+		return;
+	}
+
+	STradeBuyRequirements row_req = *alt_cost;
+	row_req.has_item_cost = true;
+
+	CGameFont* font = UICost ? UICost->GetFont() : nullptr;
+	CUIAltCostRowHelper::Update(UIAltCostRow, m_AltCostSlots, row_req, m_AltCostLayout, font);
 }
 
 void CUIItemInfo::Draw()

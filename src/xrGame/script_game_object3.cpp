@@ -1923,6 +1923,18 @@ const int CScriptGameObject::getBarterTolerance() const
 	return invOwn->SpecificCharacter().barter_tolerance();
 }
 
+const bool CScriptGameObject::getAltItemCost() const
+{
+	const CInventoryOwner* invOwn = this->object().cast_inventory_owner();
+
+	if (invOwn == nullptr)
+	{
+		return false;
+	}
+
+	return invOwn->SpecificCharacter().alt_item_cost();
+}
+
 
 void CScriptGameObject::SetHeadRotate(bool value)
 {

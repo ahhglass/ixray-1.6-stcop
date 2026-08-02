@@ -46,6 +46,7 @@ struct SSpecificCharacterData : CSharedResource
 	mutable bool m_upgrade_mechanic;
 	bool		m_barter_trade;
 	s32			m_barter_tolerance;
+	bool		m_alt_item_cost;
 
 	xr_string	m_critical_wound_weights;
 #endif
@@ -161,6 +162,7 @@ public:
 	bool						upgrade_mechanic		() const ;
 	bool						barter_trade			() const ;
 	s32							barter_tolerance		() const ;
+	bool						alt_item_cost			() const ;
 	const char*						critical_wound_weights	() const ;
 
 	const shared_str&			IconName				() const	{return data()->m_icon_name;};

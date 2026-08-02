@@ -7,12 +7,14 @@
 #include "../../xrUI/Widgets/UITabControl.h"
 #include "../../xrUI/ui_defs.h"
 #include "UIActorMenuBase.h"
+#include "ui_alt_cost_row.h"
 
 #include "../script_game_object.h" //Alundaio
 #include <WeaponMagazined.h>
 
 class CUICharacterInfo;
 class CUIDragDropListEx;
+struct STradeBuyRequirements;
 class CUIDragDropReferenceList;
 class CUICellItem;
 class CUIDragItem;
@@ -100,6 +102,9 @@ protected:
 	CUIStatic*					m_LeftDelimiter = nullptr;
 	CUIStatic*					m_PartnerTradeCaption = nullptr;
 	CUIStatic*					m_PartnerTradePrice = nullptr;
+	CUIWindow*					m_PartnerTradeAltCostRow = nullptr;
+	SAltCostRowLayout			m_PartnerAltCostLayout;
+	xr_vector<SAltCostIconSlot>	m_PartnerAltCostSlots;
 	CUIStatic*					m_PartnerTradeWeightMax = nullptr;
 
 	CUIStatic*					m_RightDelimiter = nullptr;
@@ -137,8 +142,16 @@ private:
 	const char* m_onBarterTolerance = {};
 	bool m_isBarterTolerance = false;
 
+	const char* m_onTraderUsesAltCost = {};
+	bool m_isTraderUsesAltCost = false;
+	const char* m_onResolveCostItems = {};
+	bool m_isResolveCostItems = false;
+
 	bool QueryBarterMode();
 	int QueryBarterTolerance();
+	bool QueryTraderUsesAltCost();
+	LPCSTR QueryResolveCostItems(LPCSTR section);
+	void CollectPartnerBuyRequirements(STradeBuyRequirements& total);
 	static bool CanPerformBarterExchange(int actor_price, int partner_price, int tolerance);
 public:
 	void						SetMenuMode							(EMenuMode mode);

@@ -209,9 +209,33 @@ function load_screen_press_any_key()
 end
 
 function CUIActorMenu_IsBarterTrade(partner_id)
+	if not trade_barter or not trade_barter.engine_is_barter_trade then
+		return false
+	end
+
 	return trade_barter.engine_is_barter_trade(partner_id)
 end
 
 function CUIActorMenu_GetBarterTolerance(partner_id)
+	if not trade_barter or not trade_barter.engine_get_barter_tolerance then
+		return 50
+	end
+
 	return trade_barter.engine_get_barter_tolerance(partner_id)
+end
+
+function CUIActorMenu_TraderUsesAltCost(partner_id)
+	if not trade_item_cost or not trade_item_cost.engine_trader_uses_alt_cost then
+		return false
+	end
+
+	return trade_item_cost.engine_trader_uses_alt_cost(partner_id)
+end
+
+function CUIActorMenu_ResolveCostItems(partner_id, item_section)
+	if not trade_item_cost or not trade_item_cost.engine_resolve_cost_items then
+		return ""
+	end
+
+	return trade_item_cost.engine_resolve_cost_items(partner_id, item_section)
 end

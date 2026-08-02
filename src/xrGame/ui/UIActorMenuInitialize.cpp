@@ -35,6 +35,8 @@ CUIActorMenu::CUIActorMenu()
 	LoadCallbackGlobals(m_isEffectDisassemble, m_onEffectDisassemble, "OnEffectDisassemble");
 	LoadCallbackGlobals(m_isBarterTrade, m_onIsBarterTrade, "OnIsBarterTrade");
 	LoadCallbackGlobals(m_isBarterTolerance, m_onBarterTolerance, "OnGetBarterTolerance");
+	LoadCallbackGlobals(m_isTraderUsesAltCost, m_onTraderUsesAltCost, "OnTraderUsesAltCost");
+	LoadCallbackGlobals(m_isResolveCostItems, m_onResolveCostItems, "OnResolveCostItems");
 
 	Construct						();
 }
@@ -98,6 +100,18 @@ void CUIActorMenu::Construct()
 		m_PartnerTradeCaption->AdjustWidthToText();
 	}
 	m_PartnerTradePrice			= UIHelper::CreateStatic(uiXml, "left_delimiter:trade_price", m_LeftDelimiter);
+	if (uiXml.NavigateToNode("left_delimiter:trade_alt_cost_row", 0) || uiXml.NavigateToNode("left_delimiter:trade_alt_cost_icons", 0))
+	{
+		LPCSTR alt_cost_node = uiXml.NavigateToNode("left_delimiter:trade_alt_cost_row", 0)
+			? "left_delimiter:trade_alt_cost_row"
+			: "left_delimiter:trade_alt_cost_icons";
+		m_PartnerTradeAltCostRow = new CUIWindow();
+		m_PartnerTradeAltCostRow->SetAutoDelete(true);
+		m_LeftDelimiter->AttachChild(m_PartnerTradeAltCostRow);
+		CUIXmlInit::InitWindow(uiXml, alt_cost_node, 0, m_PartnerTradeAltCostRow);
+		m_PartnerAltCostLayout.LoadFromXml(uiXml, alt_cost_node, 0);
+		m_PartnerTradeAltCostRow->Show(false);
+	}
 	m_PartnerTradeWeightMax		= UIHelper::CreateStatic(uiXml, "left_delimiter:trade_weight_max", m_LeftDelimiter);
 
 	InitActorWeightSection				(uiXml, xml_init);

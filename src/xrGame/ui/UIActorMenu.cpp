@@ -21,6 +21,7 @@
 #include "../Scope.h"
 #include "../GrenadeLauncher.h"
 #include "../trade_parameters.h"
+#include "../trade_item_cost.h"
 #include "../ActorHelmet.h"
 #include "../CustomOutfit.h"
 #include "../eatable_item.h"
@@ -570,7 +571,19 @@ void CUIActorMenu::InfoCurItem( CUICellItem* cell_item )
 				current_item->GetCondition() < m_pPartnerInvOwner->trade_parameters().buy_item_condition_factor)
 			m_ItemInfo->InitItem	( cell_item, compare_item, u32(-1), "st_no_trade_tip_2" );
 		else
-			m_ItemInfo->InitItem	( cell_item, compare_item, item_price );
+		{
+			STradeBuyRequirements alt_req;
+			bool show_alt_cost = false;
+
+			if (!m_bBarterModeActive && QueryTraderUsesAltCost() && item_owner && item_owner != m_pActorInvOwner)
+			{
+				LPCSTR override_str = QueryResolveCostItems(current_item->m_section_id.c_str());
+				CTradeItemCostService::BuildBuyRequirements(current_item, m_partner_trade, false, true, override_str, alt_req);
+				show_alt_cost = alt_req.has_item_cost;
+			}
+
+			m_ItemInfo->InitItem(cell_item, compare_item, item_price, nullptr, false, show_alt_cost ? &alt_req : nullptr, show_alt_cost);
+		}
 	}
 	else
 		m_ItemInfo->InitItem	( cell_item, compare_item, u32(-1));

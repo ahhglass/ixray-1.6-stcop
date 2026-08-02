@@ -253,6 +253,8 @@
 		<trade_price x="207"  y="74" width="16" height="16">
 			<text align="l" font="letterica16"/>
 		</trade_price>
+		<!-- Alt cost row on partner side: [icon xN]. Position via x/y in delimiter -->
+		<trade_alt_cost_row x="90" y="74" width="110" height="24" icon_size="20" item_gap="6" count_offset_y="-7"/>
 		<trade_weight_max x="257" y="74" width="50" height="16">
 			<text align="l" font="letterica16" color="ui_3"/>
 		</trade_weight_max>
