@@ -437,16 +437,16 @@ void CUIActorMenu::Update()
 
 	if (m_trade_button)
 	{
-		m_trade_button->Show(showForTrade);
+		m_trade_button->SetVisible(showForTrade);
 	}
 	if (m_trade_buy_button)
 	{
 		const bool show_buy = showForTrade && !m_bBarterModeActive;
-		m_trade_buy_button->Show(show_buy);
+		m_trade_buy_button->SetVisible(show_buy);
 	}
 	if (m_trade_sell_button)
 	{
-		m_trade_sell_button->Show(showForTrade);
+		m_trade_sell_button->SetVisible(showForTrade);
 	}
 }
 

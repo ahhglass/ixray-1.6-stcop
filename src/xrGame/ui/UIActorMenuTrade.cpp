@@ -443,12 +443,12 @@ void CUIActorMenu::UpdatePrices()
 	{
 		if (m_bBarterModeActive)
 		{
-			m_trade_buy_button->Show(false);
+			m_trade_buy_button->SetVisible(false);
 			m_trade_buy_button->Enable(false);
 		}
 		else
 		{
-			m_trade_buy_button->Enable(has_partner_items);
+			m_trade_buy_button->Enable(has_partner_items && partner_price > 0);
 		}
 	}
 
@@ -463,7 +463,7 @@ void CUIActorMenu::UpdatePrices()
 		}
 		else
 		{
-			m_trade_sell_button->Enable(has_actor_items);
+			m_trade_sell_button->Enable(has_actor_items && actor_price > 0);
 		}
 	}
 }
