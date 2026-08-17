@@ -56,12 +56,15 @@ protected:
 public:
 	bool				m_bAbsolutePositioning;
 	float				m_fov;
+	float				m_power;
 
 						CAnimatorCamEffector	();
 	virtual				~CAnimatorCamEffector	();
 			void		Start					(const char* fn);
 	virtual bool		ProcessCam				(SCamEffectorInfo& info);
 			void		SetCyclic				(bool b)				{m_bCyclic=b;}
+			void		SetPower				(float p)				{m_power = p;}
+			float		GetPower				() const				{return m_power;}
 	virtual	bool		Valid					();
 			float		GetAnimatorLength		()						{return fLifeTime;};
 

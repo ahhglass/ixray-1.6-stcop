@@ -722,9 +722,83 @@ float add_cam_effector2(const char* fn, int id, bool cyclic, const char* cb_func
 	return						e->GetAnimatorLength();
 }
 
+float add_cam_effector(const char* fn, int id, bool cyclic, const char* cb_func, float cam_fov)
+{
+	CAnimatorCamEffectorScriptCB* e = new CAnimatorCamEffectorScriptCB(cb_func);
+	if (cam_fov)
+	{
+		e->m_bAbsolutePositioning = true;
+		e->m_fov = cam_fov;
+	}
+	e->SetType((ECamEffectorType)id);
+	e->SetCyclic(cyclic);
+	e->Start(fn);
+	Actor()->Cameras().AddCamEffector(e);
+	return e->GetAnimatorLength();
+}
+
+float add_cam_effector(const char* fn, int id, bool cyclic, const char* cb_func, float cam_fov, bool b_hud)
+{
+	CAnimatorCamEffectorScriptCB* e = new CAnimatorCamEffectorScriptCB(cb_func);
+	if (cam_fov)
+	{
+		e->m_bAbsolutePositioning = true;
+		e->m_fov = cam_fov;
+	}
+	e->SetHudAffect(b_hud);
+	e->SetType((ECamEffectorType)id);
+	e->SetCyclic(cyclic);
+	e->Start(fn);
+	Actor()->Cameras().AddCamEffector(e);
+	return e->GetAnimatorLength();
+}
+
+float add_cam_effector(const char* fn, int id, bool cyclic, const char* cb_func, float cam_fov, bool b_hud, float power)
+{
+	CAnimatorCamEffectorScriptCB* e = new CAnimatorCamEffectorScriptCB(cb_func);
+	if (cam_fov)
+	{
+		e->m_bAbsolutePositioning = true;
+		e->m_fov = cam_fov;
+	}
+	if (power)
+	{
+		e->SetPower(power);
+	}
+	e->SetHudAffect(b_hud);
+	e->SetType((ECamEffectorType)id);
+	e->SetCyclic(cyclic);
+	e->Start(fn);
+	Actor()->Cameras().AddCamEffector(e);
+	return e->GetAnimatorLength();
+}
+
 void remove_cam_effector(int id)
 {
 	Actor()->Cameras().RemoveCamEffector((ECamEffectorType)id );
+}
+
+void set_cam_effector_factor(int id, float factor)
+{
+	CAnimatorCamEffectorScriptCB* e = smart_cast<CAnimatorCamEffectorScriptCB*>(Actor()->Cameras().GetCamEffector((ECamEffectorType)id));
+	if (e)
+		e->SetPower(factor);
+}
+
+float get_cam_effector_factor(int id)
+{
+	CAnimatorCamEffectorScriptCB* e = smart_cast<CAnimatorCamEffectorScriptCB*>(Actor()->Cameras().GetCamEffector((ECamEffectorType)id));
+	return e ? e->GetPower() : 0.0f;
+}
+
+bool check_cam_effector(int id)
+{
+	CAnimatorCamEffectorScriptCB* e = smart_cast<CAnimatorCamEffectorScriptCB*>(Actor()->Cameras().GetCamEffector((ECamEffectorType)id));
+	if (e)
+	{
+		return e->Valid();
+	}
+	return false;
 }
 		
 float get_snd_volume()
@@ -1974,10 +2048,16 @@ void CLevel::script_register(lua_State *L)
 		def("set_snd_volume",					&set_snd_volume),
 		def("is_inventory_volume_enabled",		&is_inventory_volume_enabled),
 		def("set_inventory_volume_enabled",		&set_inventory_volume_enabled),
-		def("add_cam_effector",					&add_cam_effector),
+		def("add_cam_effector",					(float (*)(const char*, int, bool, const char*))&add_cam_effector),
+		def("add_cam_effector",					(float (*)(const char*, int, bool, const char*, float))&add_cam_effector),
+		def("add_cam_effector",					(float (*)(const char*, int, bool, const char*, float, bool))&add_cam_effector),
+		def("add_cam_effector",					(float (*)(const char*, int, bool, const char*, float, bool, float))&add_cam_effector),
 		def("add_cam_effector2",				&add_cam_effector2),
 		def("add_cam_effector2",				&add_cam_effector_without_fov),
 		def("remove_cam_effector",				&remove_cam_effector),
+		def("set_cam_effector_factor",			&set_cam_effector_factor),
+		def("get_cam_effector_factor",			&get_cam_effector_factor),
+		def("check_cam_effector",				&check_cam_effector),
 		def("add_pp_effector",					&add_pp_effector),
 		def("set_pp_effector_factor",			&set_pp_effector_factor),
 		def("set_pp_effector_factor",			&set_pp_effector_factor2),

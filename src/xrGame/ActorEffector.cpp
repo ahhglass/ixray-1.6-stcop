@@ -155,6 +155,7 @@ CAnimatorCamEffector::CAnimatorCamEffector()
 	m_objectAnimator		= new CObjectAnimator();
 	m_bAbsolutePositioning	= false;
 	m_fov					= -1.0f;
+	m_power					= 1.f;
 }
 
 CAnimatorCamEffector::~CAnimatorCamEffector()
@@ -180,8 +181,17 @@ bool CAnimatorCamEffector::ProcessCam(SCamEffectorInfo& info)
 	if(!inherited::ProcessCam(info))	
 		return false;
 
-	const Fmatrix& m			= m_objectAnimator->XFORM();
+	Fmatrix m					= m_objectAnimator->XFORM();
 	m_objectAnimator->Update	(Device.fTimeDelta);
+
+	if (m_power != 1.f)
+	{
+		m.mul(m_power);
+		m.m[0][0] = 1.f;
+		m.m[1][1] = 1.f;
+		m.m[2][2] = 1.f;
+		m.m[3][3] = 1.f;
+	}
 
 	if(!m_bAbsolutePositioning){
 		Fmatrix Mdef;
