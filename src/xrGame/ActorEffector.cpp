@@ -181,18 +181,6 @@ bool CAnimatorCamEffector::ProcessCam(SCamEffectorInfo& info)
 	if(!inherited::ProcessCam(info))	
 		return false;
 
-	Fmatrix m					= m_objectAnimator->XFORM();
-	m_objectAnimator->Update	(Device.fTimeDelta);
-
-	if (m_power != 1.f)
-	{
-		m.mul(m_power);
-		m.m[0][0] = 1.f;
-		m.m[1][1] = 1.f;
-		m.m[2][2] = 1.f;
-		m.m[3][3] = 1.f;
-	}
-
 	if(!m_bAbsolutePositioning){
 		Fmatrix Mdef;
 		Mdef.identity				();
@@ -201,15 +189,55 @@ bool CAnimatorCamEffector::ProcessCam(SCamEffectorInfo& info)
 		Mdef.i.crossproduct			(info.n, info.d);
 		Mdef.c						= info.p;
 //		Msg("fr[%d] %2.3f,%2.3f,%2.3f", Device.dwFrame,m.c.x,m.c.y,m.c.z);
-		Fmatrix mr;
-		mr.mul						(Mdef,m);
-		info.d						= mr.k;
-		info.n						= mr.j;
-		info.p						= mr.c;
+		if (m_power != 1.f)
+		{
+			const Fmatrix& m_anim	= m_objectAnimator->XFORM();
+			m_objectAnimator->Update	(Device.fTimeDelta);
+			Fmatrix m				= m_anim;
+			m.mul(m_power);
+			m.m[0][0] = 1.f;
+			m.m[1][1] = 1.f;
+			m.m[2][2] = 1.f;
+			m.m[3][3] = 1.f;
+			Fmatrix mr;
+			mr.mul						(Mdef,m);
+			info.d						= mr.k;
+			info.n						= mr.j;
+			info.p						= mr.c;
+		}
+		else
+		{
+			const Fmatrix& m			= m_objectAnimator->XFORM();
+			m_objectAnimator->Update	(Device.fTimeDelta);
+			Fmatrix mr;
+			mr.mul						(Mdef,m);
+			info.d						= mr.k;
+			info.n						= mr.j;
+			info.p						= mr.c;
+		}
 	}else{
-		info.d						= m.k;
-		info.n						= m.j;
-		info.p						= m.c;
+		if (m_power != 1.f)
+		{
+			const Fmatrix& m_anim	= m_objectAnimator->XFORM();
+			m_objectAnimator->Update	(Device.fTimeDelta);
+			Fmatrix m				= m_anim;
+			m.mul(m_power);
+			m.m[0][0] = 1.f;
+			m.m[1][1] = 1.f;
+			m.m[2][2] = 1.f;
+			m.m[3][3] = 1.f;
+			info.d						= m.k;
+			info.n						= m.j;
+			info.p						= m.c;
+		}
+		else
+		{
+			const Fmatrix& m			= m_objectAnimator->XFORM();
+			m_objectAnimator->Update	(Device.fTimeDelta);
+			info.d						= m.k;
+			info.n						= m.j;
+			info.p						= m.c;
+		}
 	};
 	if(m_fov>0.0f)
 		info.fFov				= m_fov;
