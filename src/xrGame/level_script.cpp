@@ -773,6 +773,11 @@ float add_cam_effector(const char* fn, int id, bool cyclic, const char* cb_func,
 	return e->GetAnimatorLength();
 }
 
+float add_cam_effector_power(const char* fn, int id, bool cyclic, const char* cb_func, float power)
+{
+	return add_cam_effector(fn, id, cyclic, cb_func, 0.f, false, power);
+}
+
 void remove_cam_effector(int id)
 {
 	Actor()->Cameras().RemoveCamEffector((ECamEffectorType)id );
@@ -780,6 +785,7 @@ void remove_cam_effector(int id)
 
 void set_cam_effector_factor(int id, float factor)
 {
+	clamp(factor, 0.f, 2.f);
 	CAnimatorCamEffectorScriptCB* e = smart_cast<CAnimatorCamEffectorScriptCB*>(Actor()->Cameras().GetCamEffector((ECamEffectorType)id));
 	if (e)
 		e->SetPower(factor);
@@ -789,6 +795,12 @@ float get_cam_effector_factor(int id)
 {
 	CAnimatorCamEffectorScriptCB* e = smart_cast<CAnimatorCamEffectorScriptCB*>(Actor()->Cameras().GetCamEffector((ECamEffectorType)id));
 	return e ? e->GetPower() : 0.0f;
+}
+
+float get_cam_effector_length(int id)
+{
+	CAnimatorCamEffectorScriptCB* e = smart_cast<CAnimatorCamEffectorScriptCB*>(Actor()->Cameras().GetCamEffector((ECamEffectorType)id));
+	return e ? e->GetAnimatorLength() : 0.f;
 }
 
 bool check_cam_effector(int id)
@@ -2052,11 +2064,13 @@ void CLevel::script_register(lua_State *L)
 		def("add_cam_effector",					(float (*)(const char*, int, bool, const char*, float))&add_cam_effector),
 		def("add_cam_effector",					(float (*)(const char*, int, bool, const char*, float, bool))&add_cam_effector),
 		def("add_cam_effector",					(float (*)(const char*, int, bool, const char*, float, bool, float))&add_cam_effector),
+		def("add_cam_effector_power",			&add_cam_effector_power),
 		def("add_cam_effector2",				&add_cam_effector2),
 		def("add_cam_effector2",				&add_cam_effector_without_fov),
 		def("remove_cam_effector",				&remove_cam_effector),
 		def("set_cam_effector_factor",			&set_cam_effector_factor),
 		def("get_cam_effector_factor",			&get_cam_effector_factor),
+		def("get_cam_effector_length",			&get_cam_effector_length),
 		def("check_cam_effector",				&check_cam_effector),
 		def("add_pp_effector",					&add_pp_effector),
 		def("set_pp_effector_factor",			&set_pp_effector_factor),
