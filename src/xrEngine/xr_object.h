@@ -73,7 +73,6 @@ class CRocketLauncher;
 class CRadioactiveZone;
 class CExplosive;
 class CWeaponShotgun;
-class CWeaponAutomaticShotgun;
 
 //-----------------------------------------------------------------------------------------------------------
 #define CROW_RADIUS		(30.f)
@@ -260,7 +259,6 @@ public:
 	virtual CRocketLauncher* cast_rocket_launcher() { return nullptr; }
 	virtual CExplosive* cast_explosive() { return nullptr; }
 	virtual CWeaponShotgun* cast_weapon_shotgun() { return nullptr; }
-	virtual CWeaponAutomaticShotgun* cast_weapon_auto_shotgun() { return nullptr; }
 
 	bool IsFocused() const;
 	bool IsMyCamera() const;
