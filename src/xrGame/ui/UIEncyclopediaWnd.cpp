@@ -174,22 +174,27 @@ void CUIEncyclopediaWnd::OnTreeViewItemClicked(CUITreeViewItem* pTVItem)
 
 void CUIEncyclopediaWnd::Draw()
 {
-	if(	m_flags.test(eNeedReload ))
+	if (m_flags.test(eNeedReload))
 	{
-		if(Actor()->encyclopedia_registry->registry().objects_ptr() && Actor()->encyclopedia_registry->registry().objects_ptr()->size() > prevArticlesCount)
+		DeleteArticles();
+
+		if (Actor()->encyclopedia_registry->registry().objects_ptr())
 		{
-			ARTICLE_VECTOR::const_iterator it = Actor()->encyclopedia_registry->registry().objects_ptr()->begin();
-			std::advance(it, prevArticlesCount);
-			for(; it != Actor()->encyclopedia_registry->registry().objects_ptr()->end(); it++)
+			const ARTICLE_VECTOR& articles = Actor()->encyclopedia_registry->registry().objects();
+			for (ARTICLE_VECTOR::const_iterator it = articles.begin(); it != articles.end(); ++it)
 			{
 				if (ARTICLE_DATA::eEncyclopediaArticle == it->article_type)
 				{
 					AddArticle(it->article_id, it->readed);
 				}
 			}
-			prevArticlesCount = Actor()->encyclopedia_registry->registry().objects_ptr()->size();
+			prevArticlesCount = articles.size();
 		}
-		
+		else
+		{
+			prevArticlesCount = 0;
+		}
+
 		m_flags.set(eNeedReload, false);
 	}
 	inherited::Draw();
