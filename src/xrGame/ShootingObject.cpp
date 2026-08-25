@@ -60,6 +60,14 @@ void CShootingObject::Load	(const char* section)
 	LoadParticle(section, "smoke_particles", m_pSmokeParticles);
 	LoadParticle(section, "silencer_smoke_particles", m_pSmokeSilencerParticles);
 
+	m_sSmokeAfterShootParticles = READ_IF_EXISTS(pSettings, r_string, section, "smoke_after_shoot_particles", nullptr);
+	if (m_sSmokeAfterShootParticles.size())
+	{
+		m_fSmokeAfterShootInc = READ_IF_EXISTS(pSettings, r_float, section, "smoke_after_shoot_shot_inc", 0.013f);
+		m_fSmokeAfterShootDec = READ_IF_EXISTS(pSettings, r_float, section, "smoke_after_shoot_shot_dec", 0.0012f);
+		m_fSmokeAfterShootThreshold = READ_IF_EXISTS(pSettings, r_float, section, "smoke_after_shoot_threshold", 0.2f);
+	}
+
 	if (pSettings->line_exist(section, "shell_particles"))
 	{
 		if (const char* pname = pSettings->r_string(section, "shell_particles"))
@@ -91,6 +99,8 @@ void CShootingObject::DestroyEffects()
 		m_pFlameSilencerParticles->Destroy();
 	if (m_pFlameGlaucherParticles)
 		m_pFlameGlaucherParticles->Destroy();
+
+	StopSmokeAfterShootParticles();
 }
 
 void CShootingObject::LoadFireParams( const char* section )
@@ -171,6 +181,9 @@ void CShootingObject::LoadLights		(const char* section, const char* prefix)
 
 void CShootingObject::Light_Start	()
 {
+	if (m_sSmokeAfterShootParticles.size())
+		AddSmokeAfterShootHeat();
+
 	if (!m_bLightShotEnabled)
 	{
 		return;
@@ -310,6 +323,8 @@ void CShootingObject::UpdateEffects()
 	if (m_pSmokeSilencerParticles && m_pSmokeSilencerParticles->m_bPlaying)
 		m_pSmokeSilencerParticles->UpdateParent(pos, zero_vel);
 
+	UpdateSmokeAfterShootParticles();
+
 	if (light_render && light_time>0)		
 	{
 		light_time -= Device.fTimeDelta;
@@ -322,6 +337,71 @@ void CShootingObject::StopLight			()
 	if(light_render){
 		light_render->set_active(false);
 	}
+
+	if (m_fSmokeAfterShootHeat > m_fSmokeAfterShootThreshold)
+		StartSmokeAfterShootParticles();
+}
+
+void CShootingObject::AddSmokeAfterShootHeat()
+{
+	m_fSmokeAfterShootHeat += m_fSmokeAfterShootInc;
+	clamp(m_fSmokeAfterShootHeat, 0.0f, 1.0f);
+}
+
+void CShootingObject::UpdateSmokeAfterShootHeat()
+{
+	if (!m_sSmokeAfterShootParticles.size() || m_fSmokeAfterShootHeat <= 0.f)
+		return;
+
+	m_fSmokeAfterShootHeat -= m_fSmokeAfterShootDec;
+	clamp(m_fSmokeAfterShootHeat, 0.0f, 1.0f);
+}
+
+void CShootingObject::StartSmokeAfterShootParticles()
+{
+	if (!m_sSmokeAfterShootParticles.size())
+		return;
+
+	if (m_pSmokeAfterShootParticles && m_pSmokeAfterShootParticles->IsLooped() && m_pSmokeAfterShootParticles->IsPlaying())
+	{
+		UpdateSmokeAfterShootParticles();
+		return;
+	}
+
+	StopSmokeAfterShootParticles();
+	m_pSmokeAfterShootParticles = Particles::Details::Create(*m_sSmokeAfterShootParticles, false);
+	UpdateSmokeAfterShootParticles();
+
+	CSpectator* tmp_spectr = Level().CurrentControlEntity() ? Level().CurrentControlEntity()->cast_spectator() : nullptr;
+	bool in_hud_mode = IsHudModeNow();
+	if (in_hud_mode && tmp_spectr && (tmp_spectr->GetActiveCam() != CSpectator::eacFirstEye))
+		in_hud_mode = false;
+
+	m_pSmokeAfterShootParticles->Play(in_hud_mode);
+}
+
+void CShootingObject::StopSmokeAfterShootParticles()
+{
+	if (!m_pSmokeAfterShootParticles)
+		return;
+
+	m_pSmokeAfterShootParticles->m_bAutoRemove = true;
+	m_pSmokeAfterShootParticles->Stop();
+	m_pSmokeAfterShootParticles.reset();
+}
+
+void CShootingObject::UpdateSmokeAfterShootParticles()
+{
+	if (!m_pSmokeAfterShootParticles)
+		return;
+
+	Fmatrix pos;
+	pos.set(get_ParticlesXFORM());
+	pos.c.set(get_CurrentFirePoint());
+	m_pSmokeAfterShootParticles->SetXFORM(pos);
+
+	if (!m_pSmokeAfterShootParticles->IsLooped() && !m_pSmokeAfterShootParticles->m_bPlaying && !m_pSmokeAfterShootParticles->IsPlaying())
+		m_pSmokeAfterShootParticles.reset();
 }
 
 void CShootingObject::RenderLight()

@@ -156,6 +156,12 @@ protected:
 			void			StartFlameParticle();
 			void			StartSmokeParticle(const Fvector& parent_vel);
 			void			StartShellParticle(const Fvector& parent_vel);
+
+			void			StartSmokeAfterShootParticles();
+			void			StopSmokeAfterShootParticles();
+			void			UpdateSmokeAfterShootParticles();
+			void			AddSmokeAfterShootHeat();
+			void			UpdateSmokeAfterShootHeat();
 public:
 	Fvector					vLoadedShellPoint;
 	float					m_fPredBulletTime;
@@ -171,6 +177,13 @@ protected:
 	xr_shared_ptr<CParticlesObject> m_pSmokeSilencerParticles;
 	xr_shared_ptr<CParticlesObject> m_pFlameSilencerParticles;
 	xr_shared_ptr<CParticlesObject> m_pFlameGlaucherParticles;
+
+	shared_str						m_sSmokeAfterShootParticles;
+	xr_shared_ptr<CParticlesObject> m_pSmokeAfterShootParticles;
+	float							m_fSmokeAfterShootHeat = 0.f;
+	float							m_fSmokeAfterShootInc = 0.013f;
+	float							m_fSmokeAfterShootDec = 0.0012f;
+	float							m_fSmokeAfterShootThreshold = 0.2f;
 
 	ALife::_OBJECT_ID initiator_id;
 

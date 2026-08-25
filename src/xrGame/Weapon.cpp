@@ -1263,6 +1263,8 @@ void CWeapon::shedule_Update	(u32 dT)
 
 	// Inherited
 	inherited::shedule_Update	(dT);
+
+	UpdateSmokeAfterShootHeat();
 }
 
 void CWeapon::OnH_B_Independent	(bool just_before_destroy)
