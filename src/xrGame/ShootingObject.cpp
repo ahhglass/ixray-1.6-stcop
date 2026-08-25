@@ -383,6 +383,7 @@ void CShootingObject::StartSmokeAfterShootParticles()
 		in_hud_mode = false;
 
 	m_pSmokeAfterShootParticles->Play(in_hud_mode);
+	m_fSmokeAfterShootHeat = 0.f;
 }
 
 void CShootingObject::StopSmokeAfterShootParticles()
