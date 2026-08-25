@@ -370,7 +370,12 @@ void CShootingObject::StartSmokeAfterShootParticles()
 
 	StopSmokeAfterShootParticles();
 	m_pSmokeAfterShootParticles = Particles::Details::Create(*m_sSmokeAfterShootParticles, false);
+	if (!m_pSmokeAfterShootParticles)
+		return;
+
 	UpdateSmokeAfterShootParticles();
+	if (!m_pSmokeAfterShootParticles)
+		return;
 
 	CSpectator* tmp_spectr = Level().CurrentControlEntity() ? Level().CurrentControlEntity()->cast_spectator() : nullptr;
 	bool in_hud_mode = IsHudModeNow();
@@ -400,8 +405,13 @@ void CShootingObject::UpdateSmokeAfterShootParticles()
 	pos.c.set(get_CurrentFirePoint());
 	m_pSmokeAfterShootParticles->SetXFORM(pos);
 
-	if (!m_pSmokeAfterShootParticles->IsLooped() && !m_pSmokeAfterShootParticles->m_bPlaying && !m_pSmokeAfterShootParticles->IsPlaying())
+	if (!m_pSmokeAfterShootParticles->IsLooped()
+		&& !m_pSmokeAfterShootParticles->IsPlaying()
+		&& !m_pSmokeAfterShootParticles->IsAlive())
+	{
+		m_pSmokeAfterShootParticles->Stop();
 		m_pSmokeAfterShootParticles.reset();
+	}
 }
 
 void CShootingObject::RenderLight()
