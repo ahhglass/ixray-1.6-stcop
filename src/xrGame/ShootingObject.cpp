@@ -181,9 +181,6 @@ void CShootingObject::LoadLights		(const char* section, const char* prefix)
 
 void CShootingObject::Light_Start	()
 {
-	if (m_sSmokeAfterShootParticles.size())
-		AddSmokeAfterShootHeat();
-
 	if (!m_bLightShotEnabled)
 	{
 		return;

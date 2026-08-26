@@ -124,11 +124,13 @@ void CWeapon::FireTrace		(const Fvector& P, const Fvector& D)
 		           weapon_id,
 		           SendHit);
 	}
-	
-	if(m_bLightShotEnabled) 
-		Light_Start			();
 
-	
+	if (m_sSmokeAfterShootParticles.size())
+		AddSmokeAfterShootHeat();
+
+	if (m_bLightShotEnabled)
+		Light_Start();
+
 	// Ammo
 	if (!infinite_fire() || m_bIAmWeaponRPG7)
 	{
@@ -228,6 +230,9 @@ void CWeapon::FireTraceChamber(const Fvector& P, const Fvector& D)
 				   weapon_id,
 				   SendHit);
 	}
+
+	if (m_sSmokeAfterShootParticles.size())
+		AddSmokeAfterShootHeat();
 
 	if (m_bLightShotEnabled)
 		Light_Start();
