@@ -133,6 +133,92 @@ void HUD_SOUND_ITEM::PlaySound(HUD_SOUND_ITEM& hud_snd, const Fvector& position,
     }
 }
 
+void HUD_SOUND_ITEM::SetVolume(float new_volume)
+{
+	clamp(new_volume, 0.f, 1.f);
+
+	for (SSnd& sound : sounds)
+	{
+		sound.volume = new_volume;
+		if (sound.snd._feedback())
+			sound.snd.set_volume(new_volume);
+	}
+
+	if (m_activeSnd)
+		m_activeSnd->volume = new_volume;
+}
+
+// Отдельный путь для лупа перегрева: не трогает другие звуки коллекции, обновляет 3D-позицию каждый кадр.
+void HUD_SOUND_ITEM::UpdateLoopedHudSound(HUD_SOUND_ITEM& hud_snd, const Fvector& position, const CObject* parent, bool b_hud_mode, float volume, u8 index)
+{
+	if (hud_snd.sounds.empty())
+		return;
+
+	clamp(volume, 0.f, 1.f);
+
+	const float hud_k = (b_hud_mode ? psHUDSoundVolume : 1.f) * g_fHudSndVolumeFactor;
+	const float applied_volume = volume * hud_k;
+
+	if (!hud_snd.playing())
+	{
+		const u32 sounds_pool_size = (u32)hud_snd.sounds.size();
+		if (index != u8(-1) && index < sounds_pool_size)
+			hud_snd.m_activeSnd = &hud_snd.sounds[index];
+		else
+			hud_snd.m_activeSnd = &hud_snd.sounds[Random.randI(sounds_pool_size)];
+
+		const u32 flags = (b_hud_mode ? sm_2D : 0) | sm_Looped;
+		const Fvector pos = (flags & sm_2D) ? zero_vel : position;
+		hud_snd.m_activeSnd->snd.play_at_pos(const_cast<CObject*>(parent), pos, flags, hud_snd.m_activeSnd->delay);
+		hud_snd.m_activeSnd->snd.set_priority(2.f);
+
+		if (hud_snd.m_activeSnd->snd._feedback())
+		{
+			CSound_params params = hud_snd.m_activeSnd->snd.get_params();
+			hud_snd.m_activeSnd->snd.set_base_volume(params.base_volume * hud_k);
+			if (!b_hud_mode)
+			{
+				const float max_dist = std::max(params.max_distance, 8.f);
+				hud_snd.m_activeSnd->snd.set_range(0.1f, max_dist);
+			}
+		}
+	}
+	else if (!b_hud_mode)
+	{
+		hud_snd.set_position(position);
+	}
+	else if (!hud_snd.m_activeSnd)
+	{
+		for (SSnd& sound : hud_snd.sounds)
+		{
+			if (sound.snd._p && sound.snd._p->feedback)
+			{
+				hud_snd.m_activeSnd = &sound;
+				break;
+			}
+		}
+	}
+
+	if (hud_snd.m_activeSnd)
+	{
+		hud_snd.m_activeSnd->volume = volume;
+		hud_snd.m_activeSnd->snd.set_volume(applied_volume);
+		hud_snd.m_activeSnd->snd.set_frequency(g_fHudSndFrequency);
+	}
+	else
+	{
+		for (SSnd& sound : hud_snd.sounds)
+		{
+			if (sound.snd._p && sound.snd._p->feedback)
+			{
+				sound.volume = volume;
+				sound.snd.set_volume(applied_volume);
+				sound.snd.set_frequency(g_fHudSndFrequency);
+			}
+		}
+	}
+}
+
 void HUD_SOUND_ITEM::StopSound(HUD_SOUND_ITEM& hud_snd)
 {
 	for (SSnd& it : hud_snd.sounds)

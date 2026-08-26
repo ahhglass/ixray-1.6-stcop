@@ -18,23 +18,39 @@ struct HUD_SOUND_ITEM
 
 	static void	StopSound(HUD_SOUND_ITEM& snd);
 
-	ICF bool playing()
+	// Луп без HUD_SOUND_COLLECTION::PlaySound (тот останавливает exclusive-слоты коллекции).
+	// Старт/обновление громкости и позиции; b_hud_mode=false - 3D в мире (для перегрева у дула).
+	static void	UpdateLoopedHudSound(HUD_SOUND_ITEM& hud_snd, const Fvector& position, const CObject* parent, bool b_hud_mode, float volume, u8 index = u8(-1));
+
+	ICF bool playing() const
 	{
-        if (m_activeSnd)
-            return m_activeSnd->snd.is_playing();
-		else
-            return false;
+		auto has_feedback = [](const ref_sound& snd) -> bool
+		{
+			return snd._p && snd._p->feedback;
+		};
+
+		if (m_activeSnd && has_feedback(m_activeSnd->snd))
+			return true;
+
+		for (const SSnd& sound : sounds)
+		{
+			if (has_feedback(sound.snd))
+				return true;
+		}
+
+		return false;
 	}
 
     ICF void set_position(const Fvector& pos)
     {
-        if (m_activeSnd)
-        {
-            if (m_activeSnd->snd._feedback() && !m_activeSnd->snd._feedback()->is_2D())
-                m_activeSnd->snd.set_position(pos);
-            else
-                m_activeSnd = nullptr;
-        }
+		for (SSnd& sound : sounds)
+		{
+			if (!sound.snd._feedback())
+				continue;
+
+			if (!sound.snd._feedback()->is_2D())
+				sound.snd.set_position(pos);
+		}
     }
 
     static float g_fHudSndFrequency;
@@ -64,11 +80,7 @@ struct HUD_SOUND_ITEM
 
 	bool operator == (const char* alias) const{return 0==_stricmp(m_alias.c_str(),alias);}
 
-	void SetVolume(float new_volume)
-	{
-		for (auto& sound : sounds)
-			sound.snd.set_volume(new_volume);
-	}
+	void SetVolume(float new_volume);
 };
 
 class HUD_SOUND_COLLECTION

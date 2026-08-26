@@ -35,6 +35,7 @@ class CWeaponCustomPistol;
 class CParticlesObject;
 class CUIStatic;
 struct TAmmoBones;
+class HUD_SOUND_ITEM;
 
 class CWeapon : public CHudItemObject,
 				public CShootingObject
@@ -841,6 +842,7 @@ public:
 
 protected:
 	void					UpdateOverheatingSound();
+	void					ApplyOverheatingSound(float volume, bool on_shot = false);
 
 	u32						m_ef_main_weapon_type = u32(-1);
 	u32						m_ef_weapon_type = u32(-1);

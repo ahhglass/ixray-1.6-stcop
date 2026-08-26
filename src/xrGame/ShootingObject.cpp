@@ -60,6 +60,7 @@ void CShootingObject::Load	(const char* section)
 	LoadParticle(section, "smoke_particles", m_pSmokeParticles);
 	LoadParticle(section, "silencer_smoke_particles", m_pSmokeSilencerParticles);
 
+	// Перегрев ствола: общий heat для дыма (smoke_after_shoot_threshold) и звука (smoke_after_shoot_sound_threshold)
 	m_sSmokeAfterShootParticles = READ_IF_EXISTS(pSettings, r_string, section, "smoke_after_shoot_particles", nullptr);
 	if (m_sSmokeAfterShootParticles.size())
 	{
@@ -346,6 +347,7 @@ void CShootingObject::AddSmokeAfterShootHeat()
 	clamp(m_fSmokeAfterShootHeat, 0.0f, 1.0f);
 }
 
+// Громкость лупа перегрева: 0 ниже snd_thr, линейно 0..1 от snd_thr до heat=1
 float CShootingObject::GetSmokeAfterShootSoundVolume() const
 {
 	if (m_fSmokeAfterShootHeat <= m_fSmokeAfterShootSoundThreshold)
@@ -371,6 +373,7 @@ void CShootingObject::UpdateSmokeAfterShootHeat()
 
 void CShootingObject::StartSmokeAfterShootParticles()
 {
+	// heat не сбрасываем — иначе луп перегрева обрывается при старте дыма
 	if (!m_sSmokeAfterShootParticles.size())
 		return;
 
@@ -395,7 +398,6 @@ void CShootingObject::StartSmokeAfterShootParticles()
 		in_hud_mode = false;
 
 	m_pSmokeAfterShootParticles->Play(in_hud_mode);
-	m_fSmokeAfterShootHeat = 0.f;
 }
 
 void CShootingObject::StopSmokeAfterShootParticles()

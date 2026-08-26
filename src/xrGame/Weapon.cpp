@@ -35,6 +35,7 @@
 #include "Weapons/Components/WeaponAmmoBones.h"
 #include "WeaponAmmo.h"
 #include "ui/UIGameCustom.h"
+#include "HudSound.h"
 
 #include <algorithm>
 
@@ -1386,14 +1387,39 @@ void CWeapon::OnH_B_Chield		()
 
 extern u32 hud_adj_mode;
 
+// Луп snd_overheating_idle: громкость 0..1 от heat (smoke_after_shoot_* в LTX).
+// on_shot - перезапуск при выстреле, чтобы громкость не залипала.
+// Позиция 3D у дула (get_LastFP), не sm_2D - совпадает с частицами smoke_after_shoot.
+void CWeapon::ApplyOverheatingSound(float volume, bool on_shot)
+{
+	HUD_SOUND_ITEM* snd_item = m_sounds.FindSoundItem("sndOverheatingIdle", false);
+	if (!snd_item)
+		return;
+
+	if (volume <= 0.f)
+	{
+		if (snd_item->playing())
+			m_sounds.StopSound("sndOverheatingIdle");
+		return;
+	}
+
+	if (on_shot && snd_item->playing())
+		HUD_SOUND_ITEM::StopSound(*snd_item);
+
+	HUD_SOUND_ITEM::UpdateLoopedHudSound(*snd_item, get_LastFP(), H_Parent(), false, volume);
+}
+
+// Включение/выключение и обновление лупа перегрева для активного оружия актёра.
 void CWeapon::UpdateOverheatingSound()
 {
-	if (!m_sounds.FindSoundItem("sndOverheatingIdle", false))
+	HUD_SOUND_ITEM* snd_item = m_sounds.FindSoundItem("sndOverheatingIdle", false);
+	if (!snd_item)
 		return;
 
 	if (!ParentIsActor())
 	{
-		m_sounds.StopSound("sndOverheatingIdle");
+		if (snd_item->playing())
+			HUD_SOUND_ITEM::StopSound(*snd_item);
 		return;
 	}
 
@@ -1402,9 +1428,9 @@ void CWeapon::UpdateOverheatingSound()
 	const float volume = GetSmokeAfterShootSoundVolume();
 
 	if (isActive && volume > 0.f)
-		m_sounds.SetVolume("sndOverheatingIdle", volume);
-	else
-		m_sounds.StopSound("sndOverheatingIdle");
+		ApplyOverheatingSound(volume);
+	else if (snd_item->playing())
+		HUD_SOUND_ITEM::StopSound(*snd_item);
 }
 
 void set_pp_effector_factor2(int id, float f);
@@ -1472,7 +1498,7 @@ void CWeapon::UpdateCL		()
 	//подсветка от выстрела
 	UpdateEffects();
 	UpdateSmokeAfterShootHeat();
-	UpdateOverheatingSound();
+	UpdateOverheatingSound(); // остывание heat и громкость лупа перегрева
 
 	if(!IsGameTypeSingle())
 		make_Interpolation		();

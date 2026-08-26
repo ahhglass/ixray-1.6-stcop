@@ -469,8 +469,9 @@ void CWeaponMagazined::LoadSounds(const char* section)
 		m_sounds.LoadSound(section, "snd_mag_shot", "sndMagShot", true, m_eSoundEmptyClick);
 	}
 
+	// snd_overheating_idle: луп перегрева; exclusive + st_Shooting - слот не глушится выстрелами из m_sounds
 	if (SoundExist(section, "snd_overheating_idle"))
-		m_sounds.LoadSound(section, "snd_overheating_idle", "sndOverheatingIdle", true, m_eSoundEmptyClick);
+		m_sounds.LoadSound(section, "snd_overheating_idle", "sndOverheatingIdle", true, m_eSoundEmptyClick, st_Shooting);
 
 	if (SoundExist(section, "snd_bore_empty"))
 	{
@@ -1605,12 +1606,6 @@ void CWeaponMagazined::SelectShotSound()
 		}
 	}
 
-	if (m_sounds.FindSoundItem("sndOverheatingIdle", false))
-	{
-		m_sounds.PlaySound("sndOverheatingIdle", get_LastFP(), H_Parent(), !!GetHUDmode(), true, false, u8(-1));
-		m_sounds.SetVolume("sndOverheatingIdle", GetSmokeAfterShootSoundVolume());
-	}
-
 	if (!m_bIsPumpEnabled && m_eSoundsFlags.test(ESoundsFlags::sf_breechblock))
 	{
 		if (m_eSoundsFlags.test(ESoundsFlags::sf_jam) && IsMisfire())
@@ -1621,6 +1616,14 @@ void CWeaponMagazined::SelectShotSound()
 		{
 			PlaySound("sndPump", get_LastFP());
 		}
+	}
+
+	// После звука выстрела - перезапуск лупа перегрева с актуальной громкостью
+	if (m_sounds.FindSoundItem("sndOverheatingIdle", false))
+	{
+		const float volume = GetSmokeAfterShootSoundVolume();
+		if (volume > 0.f)
+			ApplyOverheatingSound(volume, true);
 	}
 }
 

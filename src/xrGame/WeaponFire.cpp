@@ -126,7 +126,10 @@ void CWeapon::FireTrace		(const Fvector& P, const Fvector& D)
 	}
 
 	if (m_sSmokeAfterShootParticles.size())
+	{
 		AddSmokeAfterShootHeat();
+		UpdateOverheatingSound();
+	}
 
 	if (m_bLightShotEnabled)
 		Light_Start();
@@ -232,7 +235,10 @@ void CWeapon::FireTraceChamber(const Fvector& P, const Fvector& D)
 	}
 
 	if (m_sSmokeAfterShootParticles.size())
+	{
 		AddSmokeAfterShootHeat();
+		UpdateOverheatingSound();
+	}
 
 	if (m_bLightShotEnabled)
 		Light_Start();
