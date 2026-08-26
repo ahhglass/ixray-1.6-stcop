@@ -223,6 +223,13 @@ void HUD_SOUND_COLLECTION::SetPosition(const char* alias, const Fvector& pos)
 	}
 }
 
+void HUD_SOUND_COLLECTION::SetVolume(const char* alias, float volume)
+{
+	HUD_SOUND_ITEM* snd_item = FindSoundItem(alias, false);
+	if (snd_item != nullptr)
+		snd_item->SetVolume(volume);
+}
+
 void HUD_SOUND_COLLECTION::StopAllSounds()
 {
 	for (HUD_SOUND_ITEM& it : m_sound_items)

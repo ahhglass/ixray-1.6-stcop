@@ -184,6 +184,9 @@ protected:
 	float							m_fSmokeAfterShootInc = 0.013f;
 	float							m_fSmokeAfterShootDec = 0.0012f;
 	float							m_fSmokeAfterShootThreshold = 0.2f;
+	float							m_fSmokeAfterShootSoundThreshold = 0.5f;
+
+	float							GetSmokeAfterShootSoundVolume() const;
 
 	ALife::_OBJECT_ID initiator_id;
 

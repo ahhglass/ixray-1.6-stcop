@@ -469,6 +469,9 @@ void CWeaponMagazined::LoadSounds(const char* section)
 		m_sounds.LoadSound(section, "snd_mag_shot", "sndMagShot", true, m_eSoundEmptyClick);
 	}
 
+	if (SoundExist(section, "snd_overheating_idle"))
+		m_sounds.LoadSound(section, "snd_overheating_idle", "sndOverheatingIdle", true, m_eSoundEmptyClick);
+
 	if (SoundExist(section, "snd_bore_empty"))
 	{
 		m_eSoundsFlags2.set(ESoundsFlags2::sf_bore_empty, true);
@@ -1224,6 +1227,8 @@ void CWeaponMagazined::UpdateSounds	()
 			m_sounds.SetPosition("sndReloadEmpty", P);
 		if (m_eSoundsFlags.test(ESoundsFlags::sf_reload_jam))
 			m_sounds.SetPosition("sndReloadMis", P);
+		if (SoundExist(m_section_id.c_str(), "snd_overheating_idle"))
+			m_sounds.SetPosition("sndOverheatingIdle", P);
 	}
 }
 
@@ -1585,7 +1590,7 @@ void CWeaponMagazined::SelectShotSound()
 
 	m_layered_sounds.PlaySound(m_sSndShotCurrent.c_str(), get_LastFP(), H_Parent(), !!GetHUDmode(), false, true);
 
-	if (m_eSoundsFlags2.test(ESoundsFlags2::sf_mag_shot))
+		if (m_eSoundsFlags2.test(ESoundsFlags2::sf_mag_shot))
 	{
 		float fAmmoElapsed = (float)get_elapsed;
 		float fmaxMagazineSize_ = GetMagCapacity() + iChamberSize;
@@ -1598,6 +1603,12 @@ void CWeaponMagazined::SelectShotSound()
 			PlaySound("sndMagShot", get_LastFP());
 			HUD_SOUND_ITEM::SetHudSndGlobalVolumeFactor(1.0f);
 		}
+	}
+
+	if (m_sounds.FindSoundItem("sndOverheatingIdle", false))
+	{
+		m_sounds.PlaySound("sndOverheatingIdle", get_LastFP(), H_Parent(), !!GetHUDmode(), true, false, u8(-1));
+		m_sounds.SetVolume("sndOverheatingIdle", GetSmokeAfterShootSoundVolume());
 	}
 
 	if (!m_bIsPumpEnabled && m_eSoundsFlags.test(ESoundsFlags::sf_breechblock))

@@ -63,6 +63,12 @@ struct HUD_SOUND_ITEM
 	xr_vector<SSnd> sounds;
 
 	bool operator == (const char* alias) const{return 0==_stricmp(m_alias.c_str(),alias);}
+
+	void SetVolume(float new_volume)
+	{
+		for (auto& sound : sounds)
+			sound.snd.set_volume(new_volume);
+	}
 };
 
 class HUD_SOUND_COLLECTION
@@ -88,6 +94,7 @@ public:
     void LoadSound(const char* section, const char* line, const char* alias, bool exclusive = false, int type = sg_SourceType, esound_type sound_type = st_Effect);
 
 	void						SetPosition		(	const char* alias, 	const Fvector& pos);
+	void						SetVolume		(	const char* alias,	float volume);
 	void						StopAllSounds	();
 };
 

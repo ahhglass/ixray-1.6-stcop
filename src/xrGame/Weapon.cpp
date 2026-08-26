@@ -1374,6 +1374,8 @@ void CWeapon::SendHiddenItem()
 void CWeapon::OnH_B_Chield		()
 {
 	m_dwWeaponIndependencyTime = 0;
+	if (m_sounds.FindSoundItem("sndOverheatingIdle", false))
+		m_sounds.StopSound("sndOverheatingIdle");
 	inherited::OnH_B_Chield		();
 
 	OnZoomOut					();
@@ -1383,6 +1385,27 @@ void CWeapon::OnH_B_Chield		()
 }
 
 extern u32 hud_adj_mode;
+
+void CWeapon::UpdateOverheatingSound()
+{
+	if (!m_sounds.FindSoundItem("sndOverheatingIdle", false))
+		return;
+
+	if (!ParentIsActor())
+	{
+		m_sounds.StopSound("sndOverheatingIdle");
+		return;
+	}
+
+	CActor* actor = H_Parent() ? H_Parent()->cast_actor() : nullptr;
+	const bool isActive = actor && actor->inventory().ActiveItem() == this;
+	const float volume = GetSmokeAfterShootSoundVolume();
+
+	if (isActive && volume > 0.f)
+		m_sounds.SetVolume("sndOverheatingIdle", volume);
+	else
+		m_sounds.StopSound("sndOverheatingIdle");
+}
 
 void set_pp_effector_factor2(int id, float f);
 
@@ -1449,6 +1472,7 @@ void CWeapon::UpdateCL		()
 	//подсветка от выстрела
 	UpdateEffects();
 	UpdateSmokeAfterShootHeat();
+	UpdateOverheatingSound();
 
 	if(!IsGameTypeSingle())
 		make_Interpolation		();

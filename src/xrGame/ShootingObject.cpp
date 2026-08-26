@@ -66,6 +66,7 @@ void CShootingObject::Load	(const char* section)
 		m_fSmokeAfterShootInc = READ_IF_EXISTS(pSettings, r_float, section, "smoke_after_shoot_shot_inc", 0.013f);
 		m_fSmokeAfterShootDec = READ_IF_EXISTS(pSettings, r_float, section, "smoke_after_shoot_shot_dec", 0.0012f);
 		m_fSmokeAfterShootThreshold = READ_IF_EXISTS(pSettings, r_float, section, "smoke_after_shoot_threshold", 0.2f);
+		m_fSmokeAfterShootSoundThreshold = READ_IF_EXISTS(pSettings, r_float, section, "smoke_after_shoot_sound_threshold", 0.5f);
 	}
 
 	if (pSettings->line_exist(section, "shell_particles"))
@@ -343,6 +344,20 @@ void CShootingObject::AddSmokeAfterShootHeat()
 {
 	m_fSmokeAfterShootHeat += m_fSmokeAfterShootInc;
 	clamp(m_fSmokeAfterShootHeat, 0.0f, 1.0f);
+}
+
+float CShootingObject::GetSmokeAfterShootSoundVolume() const
+{
+	if (m_fSmokeAfterShootHeat <= m_fSmokeAfterShootSoundThreshold)
+		return 0.f;
+
+	const float range = 1.f - m_fSmokeAfterShootSoundThreshold;
+	if (range <= 0.f)
+		return 1.f;
+
+	float volume = (m_fSmokeAfterShootHeat - m_fSmokeAfterShootSoundThreshold) / range;
+	clamp(volume, 0.f, 1.f);
+	return volume;
 }
 
 void CShootingObject::UpdateSmokeAfterShootHeat()
