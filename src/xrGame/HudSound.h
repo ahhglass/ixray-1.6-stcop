@@ -19,7 +19,7 @@ struct HUD_SOUND_ITEM
 	static void	StopSound(HUD_SOUND_ITEM& snd);
 
 	// Луп без HUD_SOUND_COLLECTION::PlaySound (тот останавливает exclusive-слоты коллекции).
-	// Старт/обновление громкости и позиции; b_hud_mode=false - 3D в мире (для перегрева у дула).
+	// volume arg = heat 0..1; SSnd::volume = множитель из LTX
 	static void	UpdateLoopedHudSound(HUD_SOUND_ITEM& hud_snd, const Fvector& position, const CObject* parent, bool b_hud_mode, float volume, u8 index = u8(-1));
 
 	ICF bool playing() const

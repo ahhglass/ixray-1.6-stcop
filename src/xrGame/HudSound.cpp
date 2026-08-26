@@ -149,6 +149,7 @@ void HUD_SOUND_ITEM::SetVolume(float new_volume)
 }
 
 // Отдельный путь для лупа перегрева: не трогает другие звуки коллекции, обновляет 3D-позицию каждый кадр.
+// volume - heat 0..1; SSnd::volume - множитель из LTX
 void HUD_SOUND_ITEM::UpdateLoopedHudSound(HUD_SOUND_ITEM& hud_snd, const Fvector& position, const CObject* parent, bool b_hud_mode, float volume, u8 index)
 {
 	if (hud_snd.sounds.empty())
@@ -157,7 +158,6 @@ void HUD_SOUND_ITEM::UpdateLoopedHudSound(HUD_SOUND_ITEM& hud_snd, const Fvector
 	clamp(volume, 0.f, 1.f);
 
 	const float hud_k = (b_hud_mode ? psHUDSoundVolume : 1.f) * g_fHudSndVolumeFactor;
-	const float applied_volume = volume * hud_k;
 
 	if (!hud_snd.playing())
 	{
@@ -201,7 +201,7 @@ void HUD_SOUND_ITEM::UpdateLoopedHudSound(HUD_SOUND_ITEM& hud_snd, const Fvector
 
 	if (hud_snd.m_activeSnd)
 	{
-		hud_snd.m_activeSnd->volume = volume;
+		const float applied_volume = volume * hud_snd.m_activeSnd->volume * hud_k;
 		hud_snd.m_activeSnd->snd.set_volume(applied_volume);
 		hud_snd.m_activeSnd->snd.set_frequency(g_fHudSndFrequency);
 	}
@@ -211,7 +211,7 @@ void HUD_SOUND_ITEM::UpdateLoopedHudSound(HUD_SOUND_ITEM& hud_snd, const Fvector
 		{
 			if (sound.snd._p && sound.snd._p->feedback)
 			{
-				sound.volume = volume;
+				const float applied_volume = volume * sound.volume * hud_k;
 				sound.snd.set_volume(applied_volume);
 				sound.snd.set_frequency(g_fHudSndFrequency);
 			}
