@@ -1228,8 +1228,6 @@ void CWeaponMagazined::UpdateSounds	()
 			m_sounds.SetPosition("sndReloadEmpty", P);
 		if (m_eSoundsFlags.test(ESoundsFlags::sf_reload_jam))
 			m_sounds.SetPosition("sndReloadMis", P);
-		if (SoundExist(m_section_id.c_str(), "snd_overheating_idle"))
-			m_sounds.SetPosition("sndOverheatingIdle", P);
 	}
 }
 
@@ -1618,12 +1616,12 @@ void CWeaponMagazined::SelectShotSound()
 		}
 	}
 
-	// После звука выстрела - перезапуск лупа перегрева с актуальной громкостью
+	// Громкость лупа перегрева после выстрела (без restart — UpdateCL тоже обновляет)
 	if (m_sounds.FindSoundItem("sndOverheatingIdle", false))
 	{
 		const float volume = GetSmokeAfterShootSoundVolume();
 		if (volume > 0.f)
-			ApplyOverheatingSound(volume, true);
+			ApplyOverheatingSound(volume);
 	}
 }
 

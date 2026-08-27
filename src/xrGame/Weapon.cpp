@@ -1388,9 +1388,8 @@ void CWeapon::OnH_B_Chield		()
 extern u32 hud_adj_mode;
 
 // Луп snd_overheating_idle: громкость 0..1 от heat (smoke_after_shoot_* в LTX).
-// on_shot - перезапуск при выстреле, чтобы громкость не залипала.
 // Позиция 3D у дула (get_LastFP), не sm_2D - совпадает с частицами smoke_after_shoot.
-void CWeapon::ApplyOverheatingSound(float volume, bool on_shot)
+void CWeapon::ApplyOverheatingSound(float volume)
 {
 	HUD_SOUND_ITEM* snd_item = m_sounds.FindSoundItem("sndOverheatingIdle", false);
 	if (!snd_item)
@@ -1402,9 +1401,6 @@ void CWeapon::ApplyOverheatingSound(float volume, bool on_shot)
 			m_sounds.StopSound("sndOverheatingIdle");
 		return;
 	}
-
-	if (on_shot && snd_item->playing())
-		HUD_SOUND_ITEM::StopSound(*snd_item);
 
 	HUD_SOUND_ITEM::UpdateLoopedHudSound(*snd_item, get_LastFP(), H_Parent(), false, volume);
 }

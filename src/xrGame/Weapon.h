@@ -842,7 +842,7 @@ public:
 
 protected:
 	void					UpdateOverheatingSound();
-	void					ApplyOverheatingSound(float volume, bool on_shot = false);
+	void					ApplyOverheatingSound(float volume);
 
 	u32						m_ef_main_weapon_type = u32(-1);
 	u32						m_ef_weapon_type = u32(-1);

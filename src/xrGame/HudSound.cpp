@@ -199,11 +199,23 @@ void HUD_SOUND_ITEM::UpdateLoopedHudSound(HUD_SOUND_ITEM& hud_snd, const Fvector
 		}
 	}
 
+	static const float volume_eps = 0.01f;
+
+	auto apply_volume = [&](SSnd& sound, float applied_volume)
+	{
+		if (sound.snd._feedback())
+		{
+			const float current = sound.snd.get_params().volume;
+			if (std::abs(applied_volume - current) >= volume_eps)
+				sound.snd.set_volume(applied_volume);
+			sound.snd.set_frequency(g_fHudSndFrequency);
+		}
+	};
+
 	if (hud_snd.m_activeSnd)
 	{
 		const float applied_volume = volume * hud_snd.m_activeSnd->volume * hud_k;
-		hud_snd.m_activeSnd->snd.set_volume(applied_volume);
-		hud_snd.m_activeSnd->snd.set_frequency(g_fHudSndFrequency);
+		apply_volume(*hud_snd.m_activeSnd, applied_volume);
 	}
 	else
 	{
@@ -212,8 +224,7 @@ void HUD_SOUND_ITEM::UpdateLoopedHudSound(HUD_SOUND_ITEM& hud_snd, const Fvector
 			if (sound.snd._p && sound.snd._p->feedback)
 			{
 				const float applied_volume = volume * sound.volume * hud_k;
-				sound.snd.set_volume(applied_volume);
-				sound.snd.set_frequency(g_fHudSndFrequency);
+				apply_volume(sound, applied_volume);
 			}
 		}
 	}
