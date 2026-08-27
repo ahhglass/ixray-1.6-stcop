@@ -8,6 +8,8 @@
 #include "PostprocessAnimator.h"
 #include "CustomOutfit.h"
 
+extern u32 death_camera_mode;
+
 CZoneEffector::CZoneEffector() 
 {
 	m_pp_effector	= nullptr;
@@ -74,7 +76,7 @@ void CZoneEffector::Update(float dist, float r, ALife::EHitType hit_type)
 
 	if (m_pp_effector)
 	{
-		if ((dist > max_r) || !camera_on_actor || (m_pActor && !m_pActor->g_Alive()))
+		if ((dist > max_r) || !camera_on_actor || (m_pActor && !m_pActor->g_Alive() && death_camera_mode != 3))
 		{
 			Stop();
 		}

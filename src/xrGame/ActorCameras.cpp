@@ -520,6 +520,23 @@ void CActor::cam_Update(float dt, float fFOV)
 
 	xform.transform_tiny(point);
 
+	if (!g_Alive() && eacFirstEye == cam_active && !Level().Cameras().GetCamEffector(cefDemo))
+	{
+		if (IKinematics* k = Visual() ? Visual()->dcast_PKinematics() : nullptr)
+		{
+			if (m_eye_left == BI_NONE)
+				m_eye_left = k->LL_BoneID("eye_left");
+
+			if (m_eye_left != BI_NONE)
+			{
+				Fmatrix m;
+				m.mul_43(XFORM(), k->LL_GetTransform(m_eye_left));
+				point = m.c;
+				m.getHPB(dangle);
+			}
+		}
+	}
+
 	if (Level().CurrentEntity() == this)
 	{
 		for (CCameraBase* cam : cameras)

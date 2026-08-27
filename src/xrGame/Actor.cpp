@@ -74,6 +74,7 @@ bool StalkerNeedsMedkitHelp(CAI_Stalker& stalker)
 
 u16 old_slot = 0;
 bool need_restore_detector = false;
+u32 death_camera_mode = 1;
 
 using namespace luabind;
 
@@ -115,6 +116,14 @@ void CActor::OnFrame()
 
 CActor::CActor() : CEntityAlive(),current_ik_cam_shift(0)
 {
+	static bool s_death_cam_cfg_loaded = false;
+	if (!s_death_cam_cfg_loaded)
+	{
+		s_death_cam_cfg_loaded = true;
+		if (CInifile* ini = EngineExternal().GetIniFile())
+			death_camera_mode = READ_IF_EXISTS(ini, r_u32, "gameplay", "DeathCameraMode", 1);
+	}
+
 	Device.seqFrame.Add(this, REG_PRIORITY_LOW - 5000);
 
 	LoadCallbackGlobals(m_isBeforeHitCallback, m_onBeforeHitCallback, "OnBeforeHit");
@@ -1428,7 +1437,12 @@ void CActor::Die	(CObject* who)
 
 	if	(IsGameTypeSingle())
 	{
-		cam_Set				(eacFreeLook);
+		if (death_camera_mode == 1)
+			cam_Set(eacFreeLook);
+		else if (death_camera_mode == 2)
+			cam_Set(eacFixedLookAt);
+		else if (death_camera_mode == 3)
+			cam_Set(eacFirstEye);
 		CurrentGameUI()->HideShownDialogs();
 		start_tutorial		("game_over");
 	} else

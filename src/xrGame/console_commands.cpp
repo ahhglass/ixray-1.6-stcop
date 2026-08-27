@@ -105,6 +105,15 @@ extern ENGINE_API int m_look_cam_fp_zoom;
 int m_iQuickSave = 0;
 u32 m_iQuickSavesCount = 5;
 
+extern u32 death_camera_mode;
+xr_token death_camera_mode_token[] =
+{
+	{ "freelook",  1 },
+	{ "fixedlook", 2 },
+	{ "firsteye",  3 },
+	{ nullptr,     0 }
+};
+
 xr_token quicksave_count_token[] =
 {
 	{ "1",	1 },
@@ -232,6 +241,34 @@ public:
 	virtual void	Info(TInfo& I)
 	{
 		xr_strcpy(I, "game difficulty");
+	}
+};
+
+class CCC_DeathCamMode : public CCC_Token
+{
+public:
+	CCC_DeathCamMode(const char* N) : CCC_Token(N, &death_camera_mode, death_camera_mode_token) {}
+
+	void fill_tips(vecTips& tips, u32 mode) override
+	{
+		TStatus str;
+		bool res = false;
+
+		for (xr_token* tok = GetToken(); tok->name && !res; ++tok)
+		{
+			if (std::cmp_equal(tok->id, *value))
+			{
+				xr_sprintf(str, sizeof(str), "%s (current)", tok->name);
+				tips.emplace_back(str);
+				res = true;
+			}
+		}
+
+		if (!res)
+			tips.emplace_back("--- (current)");
+
+		for (xr_token* tok = GetToken(); tok->name; ++tok)
+			tips.emplace_back(tok->name);
 	}
 };
 
@@ -2941,6 +2978,7 @@ void CCC_RegisterCommands()
 #endif
 
 	CMD3(CCC_Token, "g_quicksaves_count", &m_iQuickSavesCount, quicksave_count_token);
+	CMD1(CCC_DeathCamMode, "g_death_cam_mode");
 
 #ifdef DEBUG
 	extern bool g_ai_dbg_sight;
