@@ -73,12 +73,12 @@ void CActor::g_cl_ValidateMState(float dt, u32 mstate_wf)
 					mstate_real		|= mcLanding2;
 				}
 			}
+
+			PlayActorActionSound("OnLandSnd");
 		}
 
 		PlayRainStep(!!HUDview());
 		PlayExoStep(!!HUDview());
-
-		PlayActorActionSound("OnLandSnd");
 
 		m_bJumpKeyPressed	=	true;
 		m_fJumpTime			=	s_fJumpTime;
@@ -431,7 +431,7 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 			change_name("crouch_up", eCEActorMovingCrouchUp);
 		}
 
-		if (state_anm.size() > 0)
+		if (state_anm.size() > 0 && state_anm != m_last_action_sound_anm)
 		{
 			const char* anm = state_anm.c_str();
 			if (0 == strncmp(anm, "crouch_down", 11))
@@ -440,6 +440,11 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 				PlayActorActionSound("OnCrouchOutSnd");
 			else if (strstr(anm, "lookout_"))
 				PlayActorActionSound("OnLookoutSnd");
+			m_last_action_sound_anm = state_anm;
+		}
+		else if (state_anm.size() == 0)
+		{
+			m_last_action_sound_anm = nullptr;
 		}
 
 		if (state_anm.size() > 0)

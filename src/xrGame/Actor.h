@@ -293,6 +293,7 @@ protected:
 	bool				m_hasLastStatPosition = false;
 	ref_sound			m_rainOnHelmetSnd = {};
 	HUD_SOUND_COLLECTION_LAYERED m_action_sounds;
+	shared_str					 m_last_action_sound_anm;
 
 	xr_vector<const CArtefact*> m_ArtefactsOnBelt;
 
