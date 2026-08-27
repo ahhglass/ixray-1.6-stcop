@@ -22,6 +22,8 @@
 #include "EffectorNightVision.h"
 #include "HudAnimatorManager.h"
 #include "nvg.h"
+#include "HudSound.h"
+
 
 using namespace ACTOR_DEFS;
 
@@ -125,6 +127,7 @@ public:
 
 	virtual void						shedule_Update		( u32 T );
 	void PlayRainOnHelmetSound();
+	void PlayActorActionSound(LPCSTR alias);
 	virtual void						UpdateCL			( );
 	void draw_electrical_fur();
 			void						UpdateLensFOV		(CWeapon* wpn, float value);
@@ -289,6 +292,7 @@ protected:
 	Fvector				m_lastStatPosition = {};
 	bool				m_hasLastStatPosition = false;
 	ref_sound			m_rainOnHelmetSnd = {};
+	HUD_SOUND_COLLECTION_LAYERED m_action_sounds;
 
 	xr_vector<const CArtefact*> m_ArtefactsOnBelt;
 

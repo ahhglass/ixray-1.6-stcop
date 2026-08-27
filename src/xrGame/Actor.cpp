@@ -586,6 +586,18 @@ void CActor::Load	(const char* section )
 			m_BloodSnd.create(pSettings->r_string(section, "heavy_blood_snd"), st_Effect, SOUND_TYPE_MONSTER_INJURING);
 			m_DangerSnd.create(READ_IF_EXISTS(pSettings, r_string, section, "heavy_danger_snd", pSettings->r_string(section, "heavy_blood_snd")), st_Effect, SOUND_TYPE_MONSTER_INJURING);
 		}
+
+		shared_str action_sounds_sect = READ_IF_EXISTS(pSettings, r_string, section, "action_sounds_section", "action_sounds");
+		if (pSettings->section_exist(action_sounds_sect))
+		{
+			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_jump_snd", "OnJumpSnd", false, sg_SourceType, st_Effect);
+			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_land_snd", "OnLandSnd", false, sg_SourceType, st_Effect);
+			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_crouch_in_snd", "OnCrouchInSnd", false, sg_SourceType, st_Effect);
+			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_crouch_out_snd", "OnCrouchOutSnd", false, sg_SourceType, st_Effect);
+			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_crouch_slow_in_snd", "OnCrouchSlowInSnd", false, sg_SourceType, st_Effect);
+			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_crouch_slow_out_snd", "OnCrouchSlowOutSnd", false, sg_SourceType, st_Effect);
+			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_lookout_snd", "OnLookoutSnd", false, sg_SourceType, st_Effect);
+		}
 	}
 
 	cam_Set(eacFirstEye);
@@ -1582,6 +1594,17 @@ float CActor::currentFOV()
 float	NET_Jump = 0;
 static bool bLook_cam_fp_zoom = false;
 extern ENGINE_API int m_look_cam_fp_zoom;
+
+void CActor::PlayActorActionSound(LPCSTR alias)
+{
+	if (g_dedicated_server)
+		return;
+
+	if (!m_action_sounds.FindSoundItem(alias, false))
+		return;
+
+	m_action_sounds.PlaySound(alias, Position(), this, true, false, false, u8(-1));
+}
 
 void CActor::PlayRainOnHelmetSound()
 {

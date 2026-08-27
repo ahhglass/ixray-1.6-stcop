@@ -78,6 +78,8 @@ void CActor::g_cl_ValidateMState(float dt, u32 mstate_wf)
 		PlayRainStep(!!HUDview());
 		PlayExoStep(!!HUDview());
 
+		PlayActorActionSound("OnLandSnd");
+
 		m_bJumpKeyPressed	=	true;
 		m_fJumpTime			=	s_fJumpTime;
 		mstate_real			&=~	(mcFall|mcJump);
@@ -247,6 +249,7 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 				conditions().ConditionJump(inventory().TotalWeight() / MaxCarryWeight());
 
 			callback(GameObject::eOnActorJumpBegin)(Position());
+			PlayActorActionSound("OnJumpSnd");
 		}
 
 		// mask input into "real" state
@@ -257,13 +260,20 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 			if (!isActorAccelerated(mstate_real, IsZoomAimingMode()) && isActorAccelerated(mstate_wf, IsZoomAimingMode()))
 			{
 				character_physics_support()->movement()->EnableCharacter();
-				if(!character_physics_support()->movement()->ActivateBoxDynamic(1))move	&=~mcAccel;
+				if (character_physics_support()->movement()->ActivateBoxDynamic(1))
+					PlayActorActionSound("OnCrouchSlowInSnd");
+				else
+					move	&=~mcAccel;
 			}
 
 			if (isActorAccelerated(mstate_real, IsZoomAimingMode()) && !isActorAccelerated(mstate_wf, IsZoomAimingMode()))
 			{
 				character_physics_support()->movement()->EnableCharacter();
-				if(character_physics_support()->movement()->ActivateBoxDynamic(2))mstate_real	&=~mcAccel;
+				if (character_physics_support()->movement()->ActivateBoxDynamic(2))
+				{
+					mstate_real	&=~mcAccel;
+					PlayActorActionSound("OnCrouchSlowOutSnd");
+				}
 			}
 		}
 
@@ -419,6 +429,17 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 		else if (mstate_real & mcCrouch && !(mstate_wishful & mcCrouch))
 		{
 			change_name("crouch_up", eCEActorMovingCrouchUp);
+		}
+
+		if (state_anm.size() > 0)
+		{
+			const char* anm = state_anm.c_str();
+			if (0 == strncmp(anm, "crouch_down", 11))
+				PlayActorActionSound("OnCrouchInSnd");
+			else if (0 == strncmp(anm, "crouch_up", 9))
+				PlayActorActionSound("OnCrouchOutSnd");
+			else if (strstr(anm, "lookout_"))
+				PlayActorActionSound("OnLookoutSnd");
 		}
 
 		if (state_anm.size() > 0)
