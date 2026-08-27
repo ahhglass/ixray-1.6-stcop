@@ -9,6 +9,7 @@
 #include "XR_IOConsole.h"
 #include "Render.h"
 #include "CustomHUD.h"
+#include "../xrCore/Collision/xr_collide_defs.h"
 
 ENGINE_API IGame_Persistent* g_pGamePersistent = nullptr;
 
@@ -159,4 +160,27 @@ void IGame_Persistent::OnFrameMT()
 void IGame_Persistent::OnAssetsChanged()
 {
 	Device.m_pRender->OnAssetsChanged();
+}
+
+bool IGame_Persistent::IsActorInHideout() const
+{
+#ifndef _EDITOR
+	if (!g_pGameLevel)
+		return false;
+
+	static bool actor_in_hideout = false;
+	static u32 last_ray_pick_time = 0;
+
+	if (Device.dwTimeGlobal > last_ray_pick_time + 1000)
+	{
+		last_ray_pick_time = Device.dwTimeGlobal;
+		collide::rq_result RQ;
+		actor_in_hideout = !!g_pGameLevel->ObjectSpace.RayPick(
+			Device.vCameraPosition, Fvector{ 0.f, 1.f, 0.f }, 50.f,
+			collide::rqtBoth, RQ, g_pGameLevel->CurrentViewEntity());
+	}
+	return actor_in_hideout;
+#else
+	return false;
+#endif
 }

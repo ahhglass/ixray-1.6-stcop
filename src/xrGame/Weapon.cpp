@@ -215,6 +215,8 @@ void CWeapon::UpdateFireDependencies_internal()
 
 void CWeapon::Load		(const char* section)
 {
+	m_bIndoorSoundsEnabled	= READ_IF_EXISTS(pSettings, r_bool, section, "indoor_sounds_enabled", false);
+
 	inherited::Load					(section);
 	CShootingObject::Load			(section);
 

@@ -825,6 +825,7 @@ public:
 	u8						m_ChamberAmmoType = 0;
 //-	shared_str				m_ammoName; <== deleted
 	bool					m_bHasTracers;
+	bool					m_bIndoorSoundsEnabled = false;
 	u8						m_u8TracerColorID;
 	u8						m_set_next_ammoType_on_reload = undefined_ammo_type;
 	// Multitype ammo support

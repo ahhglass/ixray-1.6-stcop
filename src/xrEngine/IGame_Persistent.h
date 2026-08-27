@@ -109,6 +109,8 @@ public:
 	virtual bool					CanBePaused			()		{ return true;}
 	virtual void					GetTextureParams	(shared_str tex, Frect& out_rect, shared_str& file_name) {}
 	virtual void					ChangeCursorPosition(Fvector2 value) {}
+
+	bool							IsActorInHideout() const;
 };
 
 extern ENGINE_API IGame_Persistent* g_pGamePersistent;

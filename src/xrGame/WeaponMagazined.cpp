@@ -12,6 +12,7 @@
 #include "ActorEffector.h"
 #include "EffectorZoomInertion.h"
 #include "../xrEngine/xr_level_controller.h"
+#include "../xrEngine/IGame_Persistent.h"
 #include "UIGameCustom.h"
 #include "object_broker.h"
 #include "../xrEngine/string_table.h"
@@ -144,6 +145,22 @@ void CWeaponMagazined::LoadSounds(const char* section)
 	{
 		m_eSoundsFlags.set(ESoundsFlags::sf_shoot_actor_last_sil, true);
 		m_layered_sounds.LoadSound(section, "snd_silencer_shot_last_actor", "sndSilencerShotLastActor", false, m_eSoundShot, st_Shooting);
+	}
+
+	if (m_bIndoorSoundsEnabled)
+	{
+		m_layered_sounds.LoadSound(section, "snd_shoot_indoor", "sndShotIndoor", false, m_eSoundShot, st_Shooting);
+		m_layered_sounds.LoadSound(section, "snd_shoot_last_indoor", "sndShotLastIndoor", false, m_eSoundShot, st_Shooting);
+		m_layered_sounds.LoadSound(section, "snd_silncer_shoot_indoor", "sndSilencerShotIndoor", false, m_eSoundShot, st_Shooting);
+		m_layered_sounds.LoadSound(section, "snd_silncer_shoot_last_indoor", "sndSilencerShotLastIndoor", false, m_eSoundShot, st_Shooting);
+
+		if (SoundExist(section, "snd_shoot_actor"))
+		{
+			m_layered_sounds.LoadSound(section, "snd_shoot_actor_indoor", "sndShotActorIndoor", false, m_eSoundShot, st_Shooting);
+			m_layered_sounds.LoadSound(section, "snd_shoot_last_actor_indoor", "sndShotActorLastIndoor", false, m_eSoundShot, st_Shooting);
+			m_layered_sounds.LoadSound(section, "snd_silncer_shoot_actor_indoor", "sndSilencerShotActorIndoor", false, m_eSoundShot, st_Shooting);
+			m_layered_sounds.LoadSound(section, "snd_silncer_shoot_last_actor_indoor", "sndSilencerShotActorLastIndoor", false, m_eSoundShot, st_Shooting);
+		}
 	}
 
 	m_sounds.LoadSound(section, "snd_empty", "sndEmptyClick", true, m_eSoundEmptyClick);
@@ -1585,6 +1602,15 @@ void CWeaponMagazined::SelectShotSound()
 				m_sSndShotCurrent = "sndShot";
 			}
 		}
+	}
+
+	if (m_bIndoorSoundsEnabled && g_pGamePersistent && g_pGamePersistent->IsActorInHideout())
+	{
+		string128 indoorName;
+		xr_strcpy(indoorName, m_sSndShotCurrent.c_str());
+		xr_strcat(indoorName, "Indoor");
+		if (m_layered_sounds.FindSoundItem(indoorName, false))
+			m_sSndShotCurrent = indoorName;
 	}
 
 	m_layered_sounds.PlaySound(m_sSndShotCurrent.c_str(), get_LastFP(), H_Parent(), !!GetHUDmode(), false, true);
