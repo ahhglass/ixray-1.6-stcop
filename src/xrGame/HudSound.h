@@ -89,6 +89,8 @@ class HUD_SOUND_COLLECTION
     // HUD_SOUND_ITEM*				FindSoundItem	(	const char* alias, bool b_assert);
 public:
 	xr_string m_alias; // Alundaio: For use when it's part of a layered Collection
+	bool IsDistantSound = false; // snd_N_layer_dist: играет только издалека
+	bool IsRandomSound = false;    // snd_N_layer_rnd: один случайный из группы
 	~HUD_SOUND_COLLECTION();
 
     void Clear();

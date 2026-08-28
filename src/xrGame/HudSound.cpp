@@ -1,15 +1,22 @@
 #include "StdAfx.h"
 #include "HudSound.h"
 
+namespace
+{
+	constexpr int kHudSoundMaxLayers = 32;
+}
+
 float HUD_SOUND_ITEM::g_fHudSndFrequency = 1.0f;
 float HUD_SOUND_ITEM::g_fHudSndVolumeFactor = 1.0f;
 float psHUDSoundVolume = 1.0f;
 float psHUDStepSoundVolume = 1.0f;
+float psDistantSndDistance = 150.f; // порог для snd_N_layer_dist, из [hud_sound] distant_snd_distance
 
 void InitHudSoundSettings()
 {
 	psHUDSoundVolume = READ_IF_EXISTS(pSettings, r_float, "hud_sound", "hud_sound_vol_k", 1.0f);
 	psHUDStepSoundVolume = READ_IF_EXISTS(pSettings, r_float, "hud_sound", "hud_step_sound_vol_k", 1.0f);
+	psDistantSndDistance = READ_IF_EXISTS(pSettings, r_float, "hud_sound", "distant_snd_distance", 150.f);
 }
 
 void HUD_SOUND_ITEM::LoadSound(const char* section, const char* line, HUD_SOUND_ITEM& hud_snd, int type, esound_type sound_type)
@@ -240,7 +247,7 @@ void HUD_SOUND_ITEM::StopSound(HUD_SOUND_ITEM& hud_snd)
 	hud_snd.m_activeSnd = nullptr;
 }
 
-HUD_SOUND_COLLECTION::HUD_SOUND_COLLECTION() : m_alias("")
+HUD_SOUND_COLLECTION::HUD_SOUND_COLLECTION() : m_alias(""), IsDistantSound(false), IsRandomSound(false)
 {
 	m_sound_items.clear();
 
@@ -398,13 +405,62 @@ void HUD_SOUND_COLLECTION_LAYERED::SetPosition(const char* alias, const Fvector&
 
 void HUD_SOUND_COLLECTION_LAYERED::PlaySound(const char* alias, const Fvector& position, const CObject* parent, bool hud_mode, bool looped, bool allowOverlap, u8 index)
 {
-	for (HUD_SOUND_COLLECTION& it : m_sound_items)
+	xr_vector<HUD_SOUND_COLLECTION*> random_sounds;
+	xr_vector<HUD_SOUND_COLLECTION*> distant_random_sounds;
+
+	// Расстояние от камеры до точки выстрела
+	const float dist_to_camera = position.distance_to(Device.vCameraPosition);
+
+	for (HUD_SOUND_COLLECTION& sound_item : m_sound_items)
 	{
-		if (it.m_alias == alias)
+		if (sound_item.m_alias != alias)
 		{
-			it.PlaySound(alias, position, parent, hud_mode, looped, allowOverlap, index);
+			continue;
+		}
+
+		if (sound_item.IsRandomSound)
+		{
+			if (sound_item.IsDistantSound)
+			{
+				distant_random_sounds.push_back(&sound_item);
+			}
+			else
+			{
+				random_sounds.push_back(&sound_item);
+			}
+
+			continue;
+		}
+
+		// Обычные слои играют всегда, _dist только если камера далеко
+		if (!sound_item.IsDistantSound)
+		{
+			sound_item.PlaySound(alias, position, parent, hud_mode, looped, allowOverlap, index);
+		}
+		else if (dist_to_camera >= psDistantSndDistance)
+		{
+			sound_item.PlaySound(alias, position, parent, hud_mode, looped, allowOverlap, index);
 		}
 	}
+
+	auto PlayRandomSound = [&](xr_vector<HUD_SOUND_COLLECTION*>& sounds, bool distant_pool)
+	{
+		if (sounds.empty())
+		{
+			return;
+		}
+
+		if (distant_pool && dist_to_camera < psDistantSndDistance)
+		{
+			return;
+		}
+
+		const u32 rnd_idx = Random.randI(sounds.size());
+		sounds[rnd_idx]->PlaySound(alias, position, parent, hud_mode, looped, allowOverlap, index);
+	};
+
+	PlayRandomSound(random_sounds, false);
+	PlayRandomSound(distant_random_sounds, true);
 }
 
 HUD_SOUND_ITEM* HUD_SOUND_COLLECTION_LAYERED::FindSoundItem(const char* alias, bool b_assert)
@@ -439,16 +495,73 @@ void HUD_SOUND_COLLECTION_LAYERED::LoadSound(const char* section, const char* li
 	if (pSettings->section_exist(buf_str))
 	{
 		string256 sound_line;
-		xr_strcpy(sound_line, "snd_1_layer");
-		int k = 1;
 
-		while (pSettings->line_exist(buf_str, sound_line))
+		// snd_N_layer: все слои играют вместе
+		for (int k = 1; k <= kHudSoundMaxLayers; ++k)
 		{
+			xr_sprintf(sound_line, "snd_%d_layer", k);
+			if (!pSettings->line_exist(buf_str, sound_line))
+			{
+				continue;
+			}
+
 			m_sound_items.resize(m_sound_items.size() + 1);
 			HUD_SOUND_COLLECTION& snd_item = m_sound_items.back();
 			snd_item.LoadSound(buf_str, sound_line, alias, exclusive, type, sound_type);
 			snd_item.m_alias = alias;
-			xr_sprintf(sound_line, "snd_%d_layer", ++k);
+			snd_item.IsDistantSound = false;
+			snd_item.IsRandomSound = false;
+		}
+
+		// snd_N_layer_dist: только если камера дальше distant_snd_distance
+		for (int k = 1; k <= kHudSoundMaxLayers; ++k)
+		{
+			xr_sprintf(sound_line, "snd_%d_layer_dist", k);
+			if (!pSettings->line_exist(buf_str, sound_line))
+			{
+				continue;
+			}
+
+			m_sound_items.resize(m_sound_items.size() + 1);
+			HUD_SOUND_COLLECTION& snd_item = m_sound_items.back();
+			snd_item.LoadSound(buf_str, sound_line, alias, exclusive, type, sound_type);
+			snd_item.m_alias = alias;
+			snd_item.IsDistantSound = true;
+			snd_item.IsRandomSound = false;
+		}
+
+		// snd_N_layer_rnd: один случайный слой из группы
+		for (int k = 1; k <= kHudSoundMaxLayers; ++k)
+		{
+			xr_sprintf(sound_line, "snd_%d_layer_rnd", k);
+			if (!pSettings->line_exist(buf_str, sound_line))
+			{
+				continue;
+			}
+
+			m_sound_items.resize(m_sound_items.size() + 1);
+			HUD_SOUND_COLLECTION& snd_item = m_sound_items.back();
+			snd_item.LoadSound(buf_str, sound_line, alias, exclusive, type, sound_type);
+			snd_item.m_alias = alias;
+			snd_item.IsDistantSound = false;
+			snd_item.IsRandomSound = true;
+		}
+
+		// snd_N_layer_dist_rnd: случайный слой + проверка дистанции
+		for (int k = 1; k <= kHudSoundMaxLayers; ++k)
+		{
+			xr_sprintf(sound_line, "snd_%d_layer_dist_rnd", k);
+			if (!pSettings->line_exist(buf_str, sound_line))
+			{
+				continue;
+			}
+
+			m_sound_items.resize(m_sound_items.size() + 1);
+			HUD_SOUND_COLLECTION& snd_item = m_sound_items.back();
+			snd_item.LoadSound(buf_str, sound_line, alias, exclusive, type, sound_type);
+			snd_item.m_alias = alias;
+			snd_item.IsDistantSound = true;
+			snd_item.IsRandomSound = true;
 		}
 	}
 	else //For compatibility with normal HUD_SOUND_COLLECTION sounds
@@ -474,15 +587,73 @@ void HUD_SOUND_COLLECTION_LAYERED::LoadSound(CInifile const* ini, const char* se
 	if (ini->section_exist(buf_str))
 	{
 		string256 sound_line;
-		xr_strcpy(sound_line, "snd_1_layer");
-		int k = 1;
-		while (ini->line_exist(buf_str, sound_line))
+
+		// snd_N_layer: все слои играют вместе
+		for (int k = 1; k <= kHudSoundMaxLayers; ++k)
 		{
+			xr_sprintf(sound_line, "snd_%d_layer", k);
+			if (!ini->line_exist(buf_str, sound_line))
+			{
+				continue;
+			}
+
 			m_sound_items.resize(m_sound_items.size() + 1);
 			HUD_SOUND_COLLECTION& snd_item = m_sound_items.back();
 			snd_item.LoadSound(buf_str, sound_line, alias, exclusive, type, sound_type);
 			snd_item.m_alias = alias;
-			xr_sprintf(sound_line, "snd_%d_layer", ++k);
+			snd_item.IsDistantSound = false;
+			snd_item.IsRandomSound = false;
+		}
+
+		// snd_N_layer_dist: только если камера дальше distant_snd_distance
+		for (int k = 1; k <= kHudSoundMaxLayers; ++k)
+		{
+			xr_sprintf(sound_line, "snd_%d_layer_dist", k);
+			if (!ini->line_exist(buf_str, sound_line))
+			{
+				continue;
+			}
+
+			m_sound_items.resize(m_sound_items.size() + 1);
+			HUD_SOUND_COLLECTION& snd_item = m_sound_items.back();
+			snd_item.LoadSound(buf_str, sound_line, alias, exclusive, type, sound_type);
+			snd_item.m_alias = alias;
+			snd_item.IsDistantSound = true;
+			snd_item.IsRandomSound = false;
+		}
+
+		// snd_N_layer_rnd: один случайный слой из группы
+		for (int k = 1; k <= kHudSoundMaxLayers; ++k)
+		{
+			xr_sprintf(sound_line, "snd_%d_layer_rnd", k);
+			if (!ini->line_exist(buf_str, sound_line))
+			{
+				continue;
+			}
+
+			m_sound_items.resize(m_sound_items.size() + 1);
+			HUD_SOUND_COLLECTION& snd_item = m_sound_items.back();
+			snd_item.LoadSound(buf_str, sound_line, alias, exclusive, type, sound_type);
+			snd_item.m_alias = alias;
+			snd_item.IsDistantSound = false;
+			snd_item.IsRandomSound = true;
+		}
+
+		// snd_N_layer_dist_rnd: случайный слой + проверка дистанции
+		for (int k = 1; k <= kHudSoundMaxLayers; ++k)
+		{
+			xr_sprintf(sound_line, "snd_%d_layer_dist_rnd", k);
+			if (!ini->line_exist(buf_str, sound_line))
+			{
+				continue;
+			}
+
+			m_sound_items.resize(m_sound_items.size() + 1);
+			HUD_SOUND_COLLECTION& snd_item = m_sound_items.back();
+			snd_item.LoadSound(buf_str, sound_line, alias, exclusive, type, sound_type);
+			snd_item.m_alias = alias;
+			snd_item.IsDistantSound = true;
+			snd_item.IsRandomSound = true;
 		}
 	}
 	else //For compatibility with normal HUD_SOUND_COLLECTION sounds
