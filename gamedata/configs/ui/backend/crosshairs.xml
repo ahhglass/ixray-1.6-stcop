@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<w>
+	<!-- DDS/TGA in textures/ui/crosshair/*.dds -->
+	<idle    texture="crosshair\crosshair_idle"    base_size="0.012" disp_scale="0"    scale_with_dispersion="0" min_radius="0.0" max_radius="0.0"  r="255" g="255" b="255" a="220"/>
+	<pistol  texture="crosshair\crosshair_pistol"  base_size="0.03"  disp_scale="0.45" scale_with_dispersion="1" min_radius="0.0" max_radius="0.15" r="255" g="255" b="255" a="255"/>
+	<smg     texture="crosshair\crosshair_smg"     base_size="0.032" disp_scale="0.55" scale_with_dispersion="1" min_radius="0.0" max_radius="0.18" r="255" g="255" b="255" a="255"/>
+	<rifle   texture="crosshair\crosshair_rifle"   base_size="0.035" disp_scale="0.5"  scale_with_dispersion="1" min_radius="0.0" max_radius="0.15" r="255" g="255" b="255" a="255"/>
+	<lmg     texture="crosshair\crosshair_lmg"     base_size="0.038" disp_scale="0.58" scale_with_dispersion="1" min_radius="0.0" max_radius="0.20" r="255" g="255" b="255" a="255"/>
+	<sniper  texture="crosshair\crosshair_sniper"  base_size="0.028" disp_scale="0.35" scale_with_dispersion="1" min_radius="0.0" max_radius="0.12" r="255" g="255" b="255" a="255"/>
+	<shotgun texture="crosshair\crosshair_shotgun" base_size="0.04"  disp_scale="0.6"  scale_with_dispersion="1" min_radius="0.0" max_radius="0.20" r="255" g="255" b="255" a="255"/>
+	<heavy   texture="crosshair\crosshair_heavy"   base_size="0.034" disp_scale="0.35" scale_with_dispersion="1" min_radius="0.0" max_radius="0.10" r="255" g="255" b="255" a="255"/>
+</w>

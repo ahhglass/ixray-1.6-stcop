@@ -2,6 +2,7 @@
 #include "pch_script.h"
 #include "Actor.h"
 #include "HUDManager.h"
+#include "HUDCrosshair.h"
 #include "Car.h"
 #include "cameralook.h"
 #include "CameraFirstEye.h"
@@ -2041,7 +2042,6 @@ void CActor::UpdateCL()
 			fire_disp_full = m_fdisp_controller.GetCurrentDispertion();
 
 			HUD().SetCrosshairDisp(fire_disp_full, 0.02f);
-			HUD().ShowCrosshair(pWeapon->use_crosshair() && !psHUD_Flags.test(HUD_CROSSHAIR_POINT));
 #ifdef DEBUG
 			HUD().SetFirstBulletCrosshairDisp(pWeapon->GetFirstBulletDisp());
 #endif
@@ -2049,7 +2049,42 @@ void CActor::UpdateCL()
 			bool B = ! ((mstate_real & mcLookout) && !IsGameTypeSingleCompatible());
 
 			psHUD_Flags.set( HUD_WEAPON_RT, B );
-			B = B && pWeapon->show_crosshair();
+
+			const bool custom_crosshairs = CHUDCrosshair::UseCustomCrosshairs();
+			const bool has_bolt = pMissile != nullptr && pMissile->cast_bolt() != nullptr;
+			const bool device_in_hand = dev != nullptr && (!dev->IsHidden() || dev->NeedActivation());
+			const bool weapon_holstered = pWeapon->IsHidden() || pWeapon->GetNextState() == CHUDState::eHidden;
+			const bool use_idle = CHUDCrosshair::ShouldUseIdleCrosshair(true, pWeapon->use_crosshair(), weapon_holstered, has_bolt, device_in_hand);
+
+			if (custom_crosshairs)
+			{
+				if (!use_idle && pWeapon->use_crosshair() && pWeapon->show_crosshair() && pWeapon->GetCrosshairType().size())
+				{
+					HUD().SetCrosshairType(pWeapon->GetCrosshairType().c_str());
+					HUD().ShowCrosshair(pWeapon->use_crosshair() && !psHUD_Flags.test(HUD_CROSSHAIR_POINT));
+					B = B && pWeapon->show_crosshair();
+				}
+				else if (use_idle)
+				{
+					HUD().SetCrosshairType(CHUDCrosshair::GetIdlePresetId());
+					HUD().ShowCrosshair(false);
+					// Same RT2 rules as legacy dot: binoc zoom hides via show_crosshair().
+					if (!pWeapon->use_crosshair())
+						B = B && pWeapon->show_crosshair();
+				}
+				else
+				{
+					HUD().SetCrosshairType(nullptr);
+					HUD().ShowCrosshair(pWeapon->use_crosshair() && !psHUD_Flags.test(HUD_CROSSHAIR_POINT));
+					B = B && pWeapon->show_crosshair();
+				}
+			}
+			else
+			{
+				HUD().SetCrosshairType(nullptr);
+				HUD().ShowCrosshair(pWeapon->use_crosshair() && !psHUD_Flags.test(HUD_CROSSHAIR_POINT));
+				B = B && pWeapon->show_crosshair();
+			}
 
 			psHUD_Flags.set( HUD_CROSSHAIR_RT2, B );
 			psHUD_Flags.set( HUD_DRAW_RT,		pWeapon->show_indicators() );
@@ -2066,7 +2101,25 @@ void CActor::UpdateCL()
 		if(Level().CurrentEntity() && this->ID()==Level().CurrentEntity()->ID() )
 		{
 			HUD().SetCrosshairDisp(0.f);
-			HUD().ShowCrosshair(false);
+
+			const bool custom_crosshairs = CHUDCrosshair::UseCustomCrosshairs();
+			const bool has_bolt = pMissile != nullptr && pMissile->cast_bolt() != nullptr;
+			const bool device_in_hand = dev != nullptr && (!dev->IsHidden() || dev->NeedActivation());
+			const bool use_idle = CHUDCrosshair::ShouldUseIdleCrosshair(false, false, false, has_bolt, device_in_hand);
+
+			if (custom_crosshairs && use_idle)
+			{
+				HUD().SetCrosshairType(CHUDCrosshair::GetIdlePresetId());
+				HUD().ShowCrosshair(false);
+
+				bool B = !((mstate_real & mcLookout) && !IsGameTypeSingleCompatible());
+				psHUD_Flags.set(HUD_CROSSHAIR_RT2, B);
+			}
+			else
+			{
+				HUD().SetCrosshairType(nullptr);
+				HUD().ShowCrosshair(false);
+			}
 
 			Device.hudViewportData.renderZoomFactor = 1.0f;
 			Device.hudViewportData.renderZoomRotateFactor = 0.0f;

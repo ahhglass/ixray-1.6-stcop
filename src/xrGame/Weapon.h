@@ -720,6 +720,7 @@ protected:
 	SPDM					m_pdm;
 	
 	float					m_crosshair_inertion = 0.0f;
+	shared_str				m_crosshair_type;
 	first_bullet_controller	m_first_bullet_controller;
 protected:
 	//для отдачи оружия
@@ -768,6 +769,7 @@ public:
 	virtual	float			Get_PDM_Crouch_NA	()	const	{ return m_pdm.m_fPDM_disp_crouch_no_acc	; };
 	void Set_PDM_Crouch_NA(float value);
 	virtual	float			GetCrosshairInertion()	const	{ return m_crosshair_inertion; };
+	IC const shared_str&	GetCrosshairType()		const	{ return m_crosshair_type; };
 	void setCrosshairInertion(float value);
 			float			GetFirstBulletDisp	()	const	{ return m_first_bullet_controller.get_fire_dispertion(); };
 

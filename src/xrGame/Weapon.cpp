@@ -376,6 +376,10 @@ void CWeapon::Load		(const char* section)
 	m_pdm.m_fPDM_disp_crouch		= READ_IF_EXISTS(pSettings, r_float, section, "PDM_disp_crouch", 1.0f);
 	m_pdm.m_fPDM_disp_crouch_no_acc	= READ_IF_EXISTS(pSettings, r_float, section, "PDM_disp_crouch_no_acc", 1.0f);
 	m_crosshair_inertion			= READ_IF_EXISTS(pSettings, r_float, section, "crosshair_inertion",	5.91f);
+	if (pSettings->line_exist(section, "crosshair"))
+		m_crosshair_type = pSettings->r_string(section, "crosshair");
+	else
+		m_crosshair_type = nullptr;
 
 	m_first_bullet_controller.load	(section);
 	fireDispersionConditionFactor = pSettings->r_float(section,"fire_dispersion_condition_factor");

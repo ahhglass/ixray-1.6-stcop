@@ -283,9 +283,6 @@ void CHUDTarget::Render()
 	//отрендерить кружочек или крестик
 	if(!m_bShowCrosshair)
 	{
-		
-		UIRender->StartPrimitive	(6, IUIRender::ptTriList, UI().m_currentPointType);
-		
 		Fvector2		scr_size;
 		scr_size.set	(float(Device.TargetWidth) ,float(Device.TargetHeight));
 		float			size_x = scr_size.x	* di_size;
@@ -300,19 +297,28 @@ void CHUDTarget::Render()
 		float cx		    = (pt.x+1)*w_2;
 		float cy		    = (pt.y+1)*h_2;
 
-		//	TODO: return code back to indexed rendering since we use quads
-		//	Tri 1
-		UIRender->PushPoint(cx - size_x, cy + size_y, 0, C, 0, 1);
-		UIRender->PushPoint(cx - size_x, cy - size_y, 0, C, 0, 0);
-		UIRender->PushPoint(cx + size_x, cy + size_y, 0, C, 1, 1);
-		//	Tri 2
-		UIRender->PushPoint(cx + size_x, cy + size_y, 0, C, 1, 1);
-		UIRender->PushPoint(cx - size_x, cy - size_y, 0, C, 0, 0);
-		UIRender->PushPoint(cx + size_x, cy - size_y, 0, C, 1, 0);
+		if (HUDCrosshair.IsIdleDotActive())
+		{
+			HUDCrosshair.OnRenderDot(cx, cy, size_x, C);
+		}
+		else
+		{
+			UIRender->StartPrimitive	(6, IUIRender::ptTriList, UI().m_currentPointType);
 
-		// unlock VB and Render it as triangle LIST
-		UIRender->SetShader(*hShader);
-		UIRender->FlushPrimitive();
+			//	TODO: return code back to indexed rendering since we use quads
+			//	Tri 1
+			UIRender->PushPoint(cx - size_x, cy + size_y, 0, C, 0, 1);
+			UIRender->PushPoint(cx - size_x, cy - size_y, 0, C, 0, 0);
+			UIRender->PushPoint(cx + size_x, cy + size_y, 0, C, 1, 1);
+			//	Tri 2
+			UIRender->PushPoint(cx + size_x, cy + size_y, 0, C, 1, 1);
+			UIRender->PushPoint(cx - size_x, cy - size_y, 0, C, 0, 0);
+			UIRender->PushPoint(cx + size_x, cy - size_y, 0, C, 1, 0);
+
+			// unlock VB and Render it as triangle LIST
+			UIRender->SetShader(*hShader);
+			UIRender->FlushPrimitive();
+		}
 
 	}else{
 		//отрендерить прицел
