@@ -600,7 +600,7 @@ void CActor::Load	(const char* section )
 		if (pSettings->section_exist(action_sounds_sect))
 		{
 			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_jump_snd", "OnJumpSnd", false, sg_SourceType, st_Effect);
-			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_land_snd", "OnLandSnd", false, sg_SourceType, st_Effect);
+			//m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_land_snd", "OnLandSnd", false, sg_SourceType, st_Effect);
 			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_crouch_in_snd", "OnCrouchInSnd", false, sg_SourceType, st_Effect);
 			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_crouch_out_snd", "OnCrouchOutSnd", false, sg_SourceType, st_Effect);
 			m_action_sounds.LoadSound(pSettings, action_sounds_sect.c_str(), "on_crouch_slow_in_snd", "OnCrouchSlowInSnd", false, sg_SourceType, st_Effect);

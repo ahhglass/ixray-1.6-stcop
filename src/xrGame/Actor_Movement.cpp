@@ -74,7 +74,7 @@ void CActor::g_cl_ValidateMState(float dt, u32 mstate_wf)
 				}
 			}
 
-			PlayActorActionSound("OnLandSnd");
+			//PlayActorActionSound("OnLandSnd");
 		}
 
 		PlayRainStep(!!HUDview());
