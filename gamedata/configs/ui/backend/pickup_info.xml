@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<w>
+	<pickup_info font="graffiti19" r="221" g="221" b="221" a="255" align_name="center" align_info="center" lerp_speed="0.15" line_spacing="1.2" show_key="1" group_same_items="1" group_distance="50.0" show_condition="1" condition_color_min_r="255" condition_color_min_g="0" condition_color_min_b="0" condition_color_min_a="255" condition_color_max_r="0" condition_color_max_g="255" condition_color_max_b="0" condition_color_max_a="255"/>
+</w>
