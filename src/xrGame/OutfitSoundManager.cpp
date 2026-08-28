@@ -67,6 +67,7 @@ void COutfitSoundManager::LoadFromActorConfig(LPCSTR section)
 	if (pSettings->line_exist(section, "sound_jump_equipment"))
 		LoadJump(_defaultJump = pSettings->r_string(section, "sound_jump_equipment"));
 	LoadNPCHitSounds();
+	LoadSettings();
 }
 
 void COutfitSoundManager::LoadSoundByType(ESoundType type, const shared_str& sect)
@@ -294,7 +295,7 @@ EHelmetType COutfitSoundManager::GetHelmetType(CHelmet* helmet) const
 		return eHelmetNone;
 	if (helmet->GlassPresent)
 		return eHelmetGlass;
-	if (helmet->bIsHudGasMaskAvialable)
+	if (helmet->IsHudGasMaskAvailable())
 		return eHelmetGasmask;
 	if (!helmet->m_HelmetType.size())
 		return eHelmetNone;
@@ -396,33 +397,16 @@ xr_vector<ref_sound>* COutfitSoundManager::GetNPCSounds(bool is_head, EArmorType
 	return &_npcSounds[index];
 }
 
-bool COutfitSoundManager::FindEffectorPath(LPCSTR zone, LPCSTR armor_type, string_path& out_path)
+static bool TryFindEffectorInDir(LPCSTR search_dir, LPCSTR armor_type, string_path& out_path)
 {
-	string256 temp_key;
-	xr_sprintf(temp_key, "%s_%s", zone, armor_type);
-	xr_string cache_key = temp_key;
-
-	auto it = s_effector_path_cache.find(cache_key);
-	if (it != s_effector_path_cache.end())
-	{
-		if (it->second.size() > 0)
-		{
-			xr_strcpy(out_path, it->second.c_str());
-			return true;
-		}
-		return false;
-	}
-
-	string_path search_dir, full_path, test_path;
+	string_path full_path, test_path;
 	FS_FileSet files;
-	xr_sprintf(search_dir, "camera_effects\\deflection\\hit_effect\\%s", zone);
 
 	xr_sprintf(test_path, "%s\\hit_%s_1.anm", search_dir, armor_type);
 	FS.update_path(full_path, "$game_anims$", test_path);
 	if (FS.exist(full_path))
 	{
 		xr_strcpy(out_path, test_path);
-		s_effector_path_cache[cache_key] = out_path;
 		return true;
 	}
 
@@ -440,7 +424,6 @@ bool COutfitSoundManager::FindEffectorPath(LPCSTR zone, LPCSTR armor_type, strin
 		if (file_it != files.end())
 		{
 			xr_strcpy(out_path, file_it->name.c_str());
-			s_effector_path_cache[cache_key] = out_path;
 			return true;
 		}
 	}
@@ -452,6 +435,41 @@ bool COutfitSoundManager::FindEffectorPath(LPCSTR zone, LPCSTR armor_type, strin
 		if (FS.exist(full_path))
 		{
 			xr_strcpy(out_path, test_path);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool COutfitSoundManager::FindEffectorPath(LPCSTR zone, LPCSTR armor_type, string_path& out_path)
+{
+	string256 temp_key;
+	xr_sprintf(temp_key, "%s_%s", zone, armor_type);
+	xr_string cache_key = temp_key;
+
+	auto it = s_effector_path_cache.find(cache_key);
+	if (it != s_effector_path_cache.end())
+	{
+		if (it->second.size() > 0)
+		{
+			xr_strcpy(out_path, it->second.c_str());
+			return true;
+		}
+		return false;
+	}
+
+	string_path search_dir;
+	static const LPCSTR base_dirs[] = {
+		"camera_effects\\wepl\\hit_effect\\%s",
+		"camera_effects\\deflection\\hit_effect\\%s"
+	};
+
+	for (LPCSTR fmt : base_dirs)
+	{
+		xr_sprintf(search_dir, fmt, zone);
+		if (TryFindEffectorInDir(search_dir, armor_type, out_path))
+		{
 			s_effector_path_cache[cache_key] = out_path;
 			return true;
 		}
