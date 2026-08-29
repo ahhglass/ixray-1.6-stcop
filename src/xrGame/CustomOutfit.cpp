@@ -41,6 +41,12 @@ void CCustomOutfit::Load(const char* section)
 	m_StepSoundClank = READ_IF_EXISTS(pSettings, r_string, section, "step_sound_clank", "");
 	m_StepSoundRustle = READ_IF_EXISTS(pSettings, r_string, section, "step_sound_rustle", "");
 	m_SoundJumpEquip = READ_IF_EXISTS(pSettings, r_string, section, "sound_jump_equipment", "");
+	m_SoundCrouchIn = READ_IF_EXISTS(pSettings, r_string, section, "sound_crouch_in", "");
+	m_SoundCrouchOut = READ_IF_EXISTS(pSettings, r_string, section, "sound_crouch_out", "");
+	m_SoundCrouchSlowIn = READ_IF_EXISTS(pSettings, r_string, section, "sound_crouch_slow_in", "");
+	m_SoundCrouchSlowOut = READ_IF_EXISTS(pSettings, r_string, section, "sound_crouch_slow_out", "");
+	m_SoundLookout = READ_IF_EXISTS(pSettings, r_string, section, "sound_lookout", "");
+	m_SoundLand = READ_IF_EXISTS(pSettings, r_string, section, "sound_land", "");
 	m_DeflectionSoundPath = READ_IF_EXISTS(pSettings, r_string, section, "deflection_sound_path", "");
 	m_ArmorType = READ_IF_EXISTS(pSettings, r_string, section, "armor_type", "");
 
@@ -67,6 +73,12 @@ void CCustomOutfit::OnMoveToSlot(const SInvItemPlace& prev)
 			pActor->m_outfit_snd.LoadClank(m_StepSoundClank);
 			pActor->m_outfit_snd.LoadRustle(m_StepSoundRustle);
 			pActor->m_outfit_snd.LoadJump(m_SoundJumpEquip);
+			pActor->m_outfit_snd.LoadCrouchIn(m_SoundCrouchIn.size() ? m_SoundCrouchIn : pActor->m_outfit_snd.GetDefaultCrouchIn());
+			pActor->m_outfit_snd.LoadCrouchOut(m_SoundCrouchOut.size() ? m_SoundCrouchOut : pActor->m_outfit_snd.GetDefaultCrouchOut());
+			pActor->m_outfit_snd.LoadCrouchSlowIn(m_SoundCrouchSlowIn.size() ? m_SoundCrouchSlowIn : pActor->m_outfit_snd.GetDefaultCrouchSlowIn());
+			pActor->m_outfit_snd.LoadCrouchSlowOut(m_SoundCrouchSlowOut.size() ? m_SoundCrouchSlowOut : pActor->m_outfit_snd.GetDefaultCrouchSlowOut());
+			pActor->m_outfit_snd.LoadLookout(m_SoundLookout.size() ? m_SoundLookout : pActor->m_outfit_snd.GetDefaultLookout());
+			pActor->m_outfit_snd.LoadLand(m_SoundLand.size() ? m_SoundLand : pActor->m_outfit_snd.GetDefaultLand());
 			pActor->m_outfit_snd.LoadDeflectionSounds(m_DeflectionSoundPath);
 		}
 	}

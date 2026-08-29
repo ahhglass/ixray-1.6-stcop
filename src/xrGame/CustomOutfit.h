@@ -44,6 +44,12 @@ public:
 	shared_str m_StepSoundClank;
 	shared_str m_StepSoundRustle;
 	shared_str m_SoundJumpEquip;
+	shared_str m_SoundCrouchIn;
+	shared_str m_SoundCrouchOut;
+	shared_str m_SoundCrouchSlowIn;
+	shared_str m_SoundCrouchSlowOut;
+	shared_str m_SoundLookout;
+	shared_str m_SoundLand;
 	shared_str m_DeflectionSoundPath;
 	shared_str m_ArmorType;
 

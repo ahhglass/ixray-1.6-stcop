@@ -27,6 +27,8 @@ namespace DeflectionConstants
 	const float RUSTLE_SOUND_VOLUME_MAX = 1.4f;
 	const float JUMP_SOUND_VOLUME_MIN = 1.8f;
 	const float JUMP_SOUND_VOLUME_MAX = 2.5f;
+	const float LAND_SOUND_VOLUME_MIN = 1.2f;
+	const float LAND_SOUND_VOLUME_MAX = 1.8f;
 	const float NPC_HIT_SOUND_VOLUME_MIN = 0.9f;
 	const float NPC_HIT_SOUND_VOLUME_MAX = 1.1f;
 	const float NPC_HIT_SOUND_RANGE_MIN = 1.0f;
@@ -67,6 +69,18 @@ void COutfitSoundManager::LoadFromActorConfig(LPCSTR section)
 		LoadRustle(_defaultRustle = pSettings->r_string(section, "step_sound_rustle"));
 	if (pSettings->line_exist(section, "sound_jump_equipment"))
 		LoadJump(_defaultJump = pSettings->r_string(section, "sound_jump_equipment"));
+	if (pSettings->line_exist(section, "sound_crouch_in"))
+		LoadCrouchIn(_defaultCrouchIn = pSettings->r_string(section, "sound_crouch_in"));
+	if (pSettings->line_exist(section, "sound_crouch_out"))
+		LoadCrouchOut(_defaultCrouchOut = pSettings->r_string(section, "sound_crouch_out"));
+	if (pSettings->line_exist(section, "sound_crouch_slow_in"))
+		LoadCrouchSlowIn(_defaultCrouchSlowIn = pSettings->r_string(section, "sound_crouch_slow_in"));
+	if (pSettings->line_exist(section, "sound_crouch_slow_out"))
+		LoadCrouchSlowOut(_defaultCrouchSlowOut = pSettings->r_string(section, "sound_crouch_slow_out"));
+	if (pSettings->line_exist(section, "sound_lookout"))
+		LoadLookout(_defaultLookout = pSettings->r_string(section, "sound_lookout"));
+	if (pSettings->line_exist(section, "sound_land"))
+		LoadLand(_defaultLand = pSettings->r_string(section, "sound_land"));
 	LoadNPCHitSounds();
 	LoadSettings();
 }
@@ -90,7 +104,11 @@ void COutfitSoundManager::LoadSoundByType(ESoundType type, const shared_str& sec
 			return;
 	}
 
-	static const LPCSTR tags[] = { "clank", "rustle", "jump", "deflection", "helmet_deflection" };
+	static const LPCSTR tags[] = {
+		"clank", "rustle", "jump",
+		"crouch_in", "crouch_out", "crouch_slow_in", "crouch_slow_out", "lookout", "land",
+		"deflection", "helmet_deflection"
+	};
 
 	if (IsLayerSection(sect.c_str()))
 	{
@@ -159,6 +177,18 @@ void COutfitSoundManager::ResetToDefault()
 		LoadRustle(_defaultRustle);
 	if (_defaultJump.size())
 		LoadJump(_defaultJump);
+	if (_defaultCrouchIn.size())
+		LoadCrouchIn(_defaultCrouchIn);
+	if (_defaultCrouchOut.size())
+		LoadCrouchOut(_defaultCrouchOut);
+	if (_defaultCrouchSlowIn.size())
+		LoadCrouchSlowIn(_defaultCrouchSlowIn);
+	if (_defaultCrouchSlowOut.size())
+		LoadCrouchSlowOut(_defaultCrouchSlowOut);
+	if (_defaultLookout.size())
+		LoadLookout(_defaultLookout);
+	if (_defaultLand.size())
+		LoadLand(_defaultLand);
 }
 
 void COutfitSoundManager::LoadSoundSet(xr_vector<ref_sound>& container, shared_str& sect, const shared_str& new_sect, LPCSTR log_tag)
@@ -249,14 +279,62 @@ void COutfitSoundManager::Play(float power, bool hud_view, CObject* owner)
 		PlaySound(_sounds[eSoundRustle], RUSTLE_SOUND_VOLUME_MIN, RUSTLE_SOUND_VOLUME_MAX, hud_view, owner, &pos, power);
 }
 
+void COutfitSoundManager::PlayMotion(ESoundType type, bool hud_view, CObject* owner, float volumeMin, float volumeMax)
+{
+	if (owner == nullptr || type >= eSoundCount)
+		return;
+
+	if (_useHudSound[type])
+		PlayHudSound(type, hud_view, owner, nullptr);
+	else
+		PlaySound(_sounds[type], volumeMin, volumeMax, hud_view, owner, nullptr, 1.0f);
+}
+
 void COutfitSoundManager::PlayJump(bool hud_view, CObject* owner)
 {
 	using namespace DeflectionConstants;
+	PlayMotion(eSoundJump, hud_view, owner, JUMP_SOUND_VOLUME_MIN, JUMP_SOUND_VOLUME_MAX);
+}
 
-	if (_useHudSound[eSoundJump])
-		PlayHudSound(eSoundJump, hud_view, owner, nullptr);
+void COutfitSoundManager::PlayLand(bool hud_view, CObject* owner)
+{
+	using namespace DeflectionConstants;
+	PlayMotion(eSoundLand, hud_view, owner, LAND_SOUND_VOLUME_MIN, LAND_SOUND_VOLUME_MAX);
+}
+
+void COutfitSoundManager::PlayCrouchIn(bool hud_view, CObject* owner)
+{
+	using namespace DeflectionConstants;
+	PlayMotion(eSoundCrouchIn, hud_view, owner, RUSTLE_SOUND_VOLUME_MIN, RUSTLE_SOUND_VOLUME_MAX);
+}
+
+void COutfitSoundManager::PlayCrouchOut(bool hud_view, CObject* owner)
+{
+	using namespace DeflectionConstants;
+	PlayMotion(eSoundCrouchOut, hud_view, owner, RUSTLE_SOUND_VOLUME_MIN, RUSTLE_SOUND_VOLUME_MAX);
+}
+
+void COutfitSoundManager::PlayCrouchSlowIn(bool hud_view, CObject* owner)
+{
+	using namespace DeflectionConstants;
+	PlayMotion(eSoundCrouchSlowIn, hud_view, owner, RUSTLE_SOUND_VOLUME_MIN, RUSTLE_SOUND_VOLUME_MAX);
+}
+
+void COutfitSoundManager::PlayCrouchSlowOut(bool hud_view, CObject* owner)
+{
+	using namespace DeflectionConstants;
+	PlayMotion(eSoundCrouchSlowOut, hud_view, owner, RUSTLE_SOUND_VOLUME_MIN, RUSTLE_SOUND_VOLUME_MAX);
+}
+
+void COutfitSoundManager::PlayLookout(bool hud_view, CObject* owner)
+{
+	using namespace DeflectionConstants;
+
+	const bool hasLookout = _useHudSound[eSoundLookout] ? !_hudSounds[eSoundLookout].sounds.empty() : !_sounds[eSoundLookout].empty();
+	if (hasLookout)
+		PlayMotion(eSoundLookout, hud_view, owner, RUSTLE_SOUND_VOLUME_MIN, RUSTLE_SOUND_VOLUME_MAX);
 	else
-		PlaySound(_sounds[eSoundJump], JUMP_SOUND_VOLUME_MIN, JUMP_SOUND_VOLUME_MAX, hud_view, owner, nullptr, 1.0f);
+		PlayMotion(eSoundRustle, hud_view, owner, RUSTLE_SOUND_VOLUME_MIN, RUSTLE_SOUND_VOLUME_MAX);
 }
 
 void COutfitSoundManager::LoadSettings()

@@ -44,6 +44,12 @@ enum ESoundType
 	eSoundClank = 0,
 	eSoundRustle,
 	eSoundJump,
+	eSoundCrouchIn,
+	eSoundCrouchOut,
+	eSoundCrouchSlowIn,
+	eSoundCrouchSlowOut,
+	eSoundLookout,
+	eSoundLand,
 	eSoundDeflectionArmor,
 	eSoundDeflectionHelmet,
 	eSoundCount
@@ -70,12 +76,24 @@ public:
 	void LoadClank(const shared_str& sect) { LoadSoundByType(eSoundClank, sect); }
 	void LoadRustle(const shared_str& sect) { LoadSoundByType(eSoundRustle, sect); }
 	void LoadJump(const shared_str& sect) { LoadSoundByType(eSoundJump, sect); }
+	void LoadCrouchIn(const shared_str& sect) { LoadSoundByType(eSoundCrouchIn, sect); }
+	void LoadCrouchOut(const shared_str& sect) { LoadSoundByType(eSoundCrouchOut, sect); }
+	void LoadCrouchSlowIn(const shared_str& sect) { LoadSoundByType(eSoundCrouchSlowIn, sect); }
+	void LoadCrouchSlowOut(const shared_str& sect) { LoadSoundByType(eSoundCrouchSlowOut, sect); }
+	void LoadLookout(const shared_str& sect) { LoadSoundByType(eSoundLookout, sect); }
+	void LoadLand(const shared_str& sect) { LoadSoundByType(eSoundLand, sect); }
 	void LoadDeflectionSounds(const shared_str& sound_path) { LoadSoundByType(eSoundDeflectionArmor, sound_path); }
 	void LoadHelmetDeflectionSounds(const shared_str& sound_path) { LoadSoundByType(eSoundDeflectionHelmet, sound_path); }
 	void LoadNPCHitSounds();
 
 	void Play(float power, bool hud_view, CObject* owner);
 	void PlayJump(bool hud_view, CObject* owner);
+	void PlayLand(bool hud_view, CObject* owner);
+	void PlayCrouchIn(bool hud_view, CObject* owner);
+	void PlayCrouchOut(bool hud_view, CObject* owner);
+	void PlayCrouchSlowIn(bool hud_view, CObject* owner);
+	void PlayCrouchSlowOut(bool hud_view, CObject* owner);
+	void PlayLookout(bool hud_view, CObject* owner);
 
 	void OnActorHit(SHit* pHit, u16 bone_id);
 	void OnNPCHit(CEntityAlive* npc, SHit* pHit, u16 bone_id);
@@ -92,6 +110,13 @@ public:
 	static bool IsActorHitSoundsEnabled() { return s_settings.enable_actor_sounds; }
 	static bool IsNPCHitSoundsEnabled() { return s_settings.enable_npc_sounds; }
 
+	const shared_str& GetDefaultCrouchIn() const { return _defaultCrouchIn; }
+	const shared_str& GetDefaultCrouchOut() const { return _defaultCrouchOut; }
+	const shared_str& GetDefaultCrouchSlowIn() const { return _defaultCrouchSlowIn; }
+	const shared_str& GetDefaultCrouchSlowOut() const { return _defaultCrouchSlowOut; }
+	const shared_str& GetDefaultLookout() const { return _defaultLookout; }
+	const shared_str& GetDefaultLand() const { return _defaultLand; }
+
 private:
 	void LoadSoundByType(ESoundType type, const shared_str& sect);
 	void ClearSoundType(ESoundType type);
@@ -102,6 +127,7 @@ private:
 	
 	void PlaySound(xr_vector<ref_sound>& sounds, float volumeMin, float volumeMax, bool hudView, CObject* owner, const Fvector* pos = nullptr, float power = 1.0f, Fvector2* range = nullptr);
 	void PlayHudSound(ESoundType type, bool hudView, CObject* owner, const Fvector* pos = nullptr);
+	void PlayMotion(ESoundType type, bool hud_view, CObject* owner, float volumeMin, float volumeMax);
 	
 	bool ValidateHit(SHit* pHit, bool for_actor) const;
 	bool IsValidHitType(ALife::EHitType hit_type) const;
@@ -132,6 +158,12 @@ private:
 	
 	shared_str				_defaultRustle;
 	shared_str				_defaultJump;
+	shared_str				_defaultCrouchIn;
+	shared_str				_defaultCrouchOut;
+	shared_str				_defaultCrouchSlowIn;
+	shared_str				_defaultCrouchSlowOut;
+	shared_str				_defaultLookout;
+	shared_str				_defaultLand;
 
 	static SHitEffectSettings s_settings;
 	static bool s_settings_loaded;

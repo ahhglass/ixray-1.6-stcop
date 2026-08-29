@@ -78,11 +78,10 @@ void CActor::g_cl_ValidateMState(float dt, u32 mstate_wf)
 				}
 			}
 
-			//PlayActorActionSound("OnLandSnd");
+			m_outfit_snd.PlayLand(!!HUDview(), this); //lxrd
 		}
 
 		PlayRainStep(!!HUDview());
-		m_outfit_snd.PlayJump(!!HUDview(), this); //lxrd
 		PlayExoStep(!!HUDview());
 
 		m_bJumpKeyPressed	=	true;
@@ -255,7 +254,6 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 				conditions().ConditionJump(inventory().TotalWeight() / MaxCarryWeight());
 
 			callback(GameObject::eOnActorJumpBegin)(Position());
-			PlayActorActionSound("OnJumpSnd");
 		}
 
 		// mask input into "real" state
@@ -267,7 +265,7 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 			{
 				character_physics_support()->movement()->EnableCharacter();
 				if (character_physics_support()->movement()->ActivateBoxDynamic(1))
-					PlayActorActionSound("OnCrouchSlowInSnd");
+					m_outfit_snd.PlayCrouchSlowIn(!!HUDview(), this);
 				else
 					move	&=~mcAccel;
 			}
@@ -278,7 +276,7 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 				if (character_physics_support()->movement()->ActivateBoxDynamic(2))
 				{
 					mstate_real	&=~mcAccel;
-					PlayActorActionSound("OnCrouchSlowOutSnd");
+					m_outfit_snd.PlayCrouchSlowOut(!!HUDview(), this);
 				}
 			}
 		}
@@ -411,19 +409,19 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 			change_name("fall", eCEActorMovingFall);
 		}
 
-		if (!(mstate_real & mcLLookout) && mstate_wishful & mcLLookout)
+		if ((mstate_wishful & mcLLookout) && !(mstate_old & mcLLookout))
 		{
 			change_name("lookout_left_start", eCEActorLLookoutStart);
 		}
-		else if (!(mstate_real & mcRLookout) && mstate_wishful & mcRLookout)
+		else if ((mstate_wishful & mcRLookout) && !(mstate_old & mcRLookout))
 		{
 			change_name("lookout_right_start", eCEActorRLookoutStart);
 		}
-		else if (mstate_real & mcLLookout && !(mstate_wishful & mcLLookout))
+		else if (!(mstate_wishful & mcLLookout) && (mstate_old & mcLLookout))
 		{
 			change_name("lookout_left_end", eCEActorLLookoutEnd);
 		}
-		else if (mstate_real & mcRLookout && !(mstate_wishful & mcRLookout))
+		else if (!(mstate_wishful & mcRLookout) && (mstate_old & mcRLookout))
 		{
 			change_name("lookout_right_end", eCEActorRLookoutEnd);
 		}
@@ -440,12 +438,12 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 		if (state_anm.size() > 0 && state_anm != m_last_action_sound_anm)
 		{
 			const char* anm = state_anm.c_str();
-			if (0 == strncmp(anm, "crouch_down", 11))
-				PlayActorActionSound("OnCrouchInSnd");
-			else if (0 == strncmp(anm, "crouch_up", 9))
-				PlayActorActionSound("OnCrouchOutSnd");
+			if (strstr(anm, "crouch_down"))
+				m_outfit_snd.PlayCrouchIn(!!HUDview(), this);
+			else if (strstr(anm, "crouch_up"))
+				m_outfit_snd.PlayCrouchOut(!!HUDview(), this);
 			else if (strstr(anm, "lookout_"))
-				PlayActorActionSound("OnLookoutSnd");
+				m_outfit_snd.PlayLookout(!!HUDview(), this);
 			m_last_action_sound_anm = state_anm;
 		}
 		else if (state_anm.size() == 0)
