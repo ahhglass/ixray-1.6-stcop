@@ -2,6 +2,7 @@
 
 #include "../xrSound/Sound.h"
 #include "../xrCore/xr_ini.h"
+#include "HudSound.h"
 
 class CObject;
 struct SHit;
@@ -96,8 +97,11 @@ private:
 	void ClearSoundType(ESoundType type);
 	void LoadSoundSet(xr_vector<ref_sound>& container, shared_str& sect, const shared_str& new_sect, LPCSTR log_tag);
 	bool LoadSoundList(xr_vector<ref_sound>& container, LPCSTR search_mask, LPCSTR log_tag) const;
+	void ClearHudSoundType(ESoundType type);
+	bool IsLayerSection(LPCSTR sect) const;
 	
 	void PlaySound(xr_vector<ref_sound>& sounds, float volumeMin, float volumeMax, bool hudView, CObject* owner, const Fvector* pos = nullptr, float power = 1.0f, Fvector2* range = nullptr);
+	void PlayHudSound(ESoundType type, bool hudView, CObject* owner, const Fvector* pos = nullptr);
 	
 	bool ValidateHit(SHit* pHit, bool for_actor) const;
 	bool IsValidHitType(ALife::EHitType hit_type) const;
@@ -122,6 +126,8 @@ private:
 private:
 	xr_vector<ref_sound>	_sounds[eSoundCount];
 	shared_str				_sections[eSoundCount];
+	HUD_SOUND_ITEM			_hudSounds[eSoundCount];
+	bool					_useHudSound[eSoundCount] = {};
 	xr_vector<ref_sound>	_npcSounds[eArmorCount + eHelmetCount];
 	
 	shared_str				_defaultRustle;

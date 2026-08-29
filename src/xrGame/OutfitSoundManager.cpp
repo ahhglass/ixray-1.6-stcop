@@ -13,6 +13,7 @@
 #include "InventoryOwner.h"
 #include "animation_utils.h"
 #include "../Include/xrRender/Kinematics.h"
+#include "HudSound.h"
 
 namespace DeflectionConstants
 {
@@ -74,9 +75,56 @@ void COutfitSoundManager::LoadSoundByType(ESoundType type, const shared_str& sec
 {
 	if (type >= eSoundCount)
 		return;
-	
+
+	if (!sect.size())
+	{
+		ClearSoundType(type);
+		return;
+	}
+
+	if (_sections[type] == sect)
+	{
+		if (_useHudSound[type] && !_hudSounds[type].sounds.empty())
+			return;
+		if (!_useHudSound[type] && !_sounds[type].empty())
+			return;
+	}
+
 	static const LPCSTR tags[] = { "clank", "rustle", "jump", "deflection", "helmet_deflection" };
+
+	if (IsLayerSection(sect.c_str()))
+	{
+		for (auto& snd : _sounds[type])
+			snd.destroy();
+		_sounds[type].clear();
+
+		HUD_SOUND_ITEM::DestroySound(_hudSounds[type]);
+		HUD_SOUND_ITEM::LoadSound(sect.c_str(), "snd_1_layer", _hudSounds[type], sg_SourceType);
+
+		_sections[type] = sect;
+		_useHudSound[type] = true;
+		return;
+	}
+
+	ClearHudSoundType(type);
+	_useHudSound[type] = false;
 	LoadSoundSet(_sounds[type], _sections[type], sect, tags[type]);
+}
+
+bool COutfitSoundManager::IsLayerSection(LPCSTR sect) const
+{
+	return pSettings && sect && *sect
+		&& pSettings->section_exist(sect)
+		&& pSettings->line_exist(sect, "snd_1_layer");
+}
+
+void COutfitSoundManager::ClearHudSoundType(ESoundType type)
+{
+	if (type >= eSoundCount)
+		return;
+
+	HUD_SOUND_ITEM::DestroySound(_hudSounds[type]);
+	_useHudSound[type] = false;
 }
 
 void COutfitSoundManager::ClearSoundType(ESoundType type)
@@ -88,6 +136,7 @@ void COutfitSoundManager::ClearSoundType(ESoundType type)
 		snd.destroy();
 	_sounds[type].clear();
 	_sections[type] = nullptr;
+	ClearHudSoundType(type);
 }
 
 void COutfitSoundManager::Clear()
@@ -172,6 +221,15 @@ void COutfitSoundManager::PlaySound(xr_vector<ref_sound>& sounds, float volumeMi
 		sounds[index].play_no_feedback(owner, hudView ? sm_2D : 0, 0, &sound_pos, &volume, nullptr, range);
 }
 
+void COutfitSoundManager::PlayHudSound(ESoundType type, bool hudView, CObject* owner, const Fvector* pos)
+{
+	if (type >= eSoundCount || owner == nullptr || !_useHudSound[type] || _hudSounds[type].sounds.empty())
+		return;
+
+	Fvector sound_pos = pos ? *pos : (hudView ? Fvector().set(0.f, 0.f, 0.f) : owner->Position());
+	HUD_SOUND_ITEM::PlaySound(_hudSounds[type], sound_pos, owner, hudView);
+}
+
 void COutfitSoundManager::Play(float power, bool hud_view, CObject* owner)
 {
 	if (owner == nullptr)
@@ -179,14 +237,26 @@ void COutfitSoundManager::Play(float power, bool hud_view, CObject* owner)
 
 	using namespace DeflectionConstants;
 	Fvector pos = hud_view ? Fvector().set(0.f, 0.f, 0.f) : owner->Position();
-	PlaySound(_sounds[eSoundClank], CLANK_SOUND_VOLUME_MIN, CLANK_SOUND_VOLUME_MAX, hud_view, owner, &pos, power);
-	PlaySound(_sounds[eSoundRustle], RUSTLE_SOUND_VOLUME_MIN, RUSTLE_SOUND_VOLUME_MAX, hud_view, owner, &pos, power);
+
+	if (_useHudSound[eSoundClank])
+		PlayHudSound(eSoundClank, hud_view, owner, &pos);
+	else
+		PlaySound(_sounds[eSoundClank], CLANK_SOUND_VOLUME_MIN, CLANK_SOUND_VOLUME_MAX, hud_view, owner, &pos, power);
+
+	if (_useHudSound[eSoundRustle])
+		PlayHudSound(eSoundRustle, hud_view, owner, &pos);
+	else
+		PlaySound(_sounds[eSoundRustle], RUSTLE_SOUND_VOLUME_MIN, RUSTLE_SOUND_VOLUME_MAX, hud_view, owner, &pos, power);
 }
 
 void COutfitSoundManager::PlayJump(bool hud_view, CObject* owner)
 {
 	using namespace DeflectionConstants;
-	PlaySound(_sounds[eSoundJump], JUMP_SOUND_VOLUME_MIN, JUMP_SOUND_VOLUME_MAX, hud_view, owner, nullptr, 1.0f);
+
+	if (_useHudSound[eSoundJump])
+		PlayHudSound(eSoundJump, hud_view, owner, nullptr);
+	else
+		PlaySound(_sounds[eSoundJump], JUMP_SOUND_VOLUME_MIN, JUMP_SOUND_VOLUME_MAX, hud_view, owner, nullptr, 1.0f);
 }
 
 void COutfitSoundManager::LoadSettings()
