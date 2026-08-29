@@ -32,6 +32,7 @@
 #include "UIInventoryUpgradeWnd.h"
 #include "UIInventoryInvalidation.h"
 #include "../../xrUI/UICursor.h"
+#include "../Actor.h"
 
 void move_item_from_to (u16 from_id, u16 to_id, u16 what_id)
 {
@@ -367,6 +368,22 @@ void CUIActorMenuBase::PlaySnd(eActorMenuSndAction a)
 {
 	if (sounds[a].handle())
 		sounds[a].play(nullptr, sm_2D);
+}
+
+void CUIActorMenuBase::PlayItemMoveSound(PIItem item, eActorMenuSndAction fallbackSound)
+{
+	if (item && item->m_pickup_sound_custom && item->m_pickup_sound_custom.size())
+	{
+		// legacy 2D:
+		// if (item->PlayPickupSound(EItemPickupPlayMode::UI_2D))
+		//     return;
+
+		CObject* actorObj = Actor() ? Actor()->cast_game_object() : nullptr;
+		if (actorObj && item->PlayPickupSound(EItemPickupPlayMode::Actor_3D, actorObj))
+			return;
+	}
+
+	PlaySnd(fallbackSound);
 }
 
 CUIDragDropListEx* CUIActorMenuBase::GetListByType(EDDListType t)

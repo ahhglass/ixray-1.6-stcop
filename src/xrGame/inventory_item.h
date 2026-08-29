@@ -14,6 +14,7 @@
 #include "xrServer_Objects_ALife.h"
 #include "xrServer_Objects_ALife_Items.h"
 #include "../xrScripts/script_export_space.h"
+#include "item_pickup_sounds.h"
 
 enum EHandDependence {
 	hdNone = 0,
@@ -229,6 +230,9 @@ public:
 		RStringVec m_items = {};
 		FloatVec m_chances = {};
 	} m_parse_params;
+
+	shared_str m_pickup_sound_custom;
+	bool PlayPickupSound(EItemPickupPlayMode mode = EItemPickupPlayMode::UI_2D, CObject* anchor = nullptr);
 
 	virtual void OnMoveToSlot(const SInvItemPlace& prev) {};
 	virtual void OnMoveToBelt(const SInvItemPlace& prev) {};

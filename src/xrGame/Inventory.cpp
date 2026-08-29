@@ -9,6 +9,7 @@
 #include "WeaponMagazined.h"
 #include "Grenade.h"
 #include "Actor.h"
+#include "item_pickup_sounds.h"
 #include "InventoryVolumeSystem.h"
 #include "../xrScripts/script_callback_ex.h"
 #include "ui/UICarBodyWnd.h"
@@ -403,6 +404,14 @@ void CInventory::Take(CGameObject* pObj, bool bNotActivate, bool strict_placemen
 		if (Level().CurrentViewEntity() == pActor_owner)
 		{
 			current_ui->OnInventoryAction(pIItem, GE_OWNERSHIP_TAKE);
+
+			const bool actorMenuShown = current_ui->ActorMenu() && current_ui->ActorMenu()->IsShown();
+			const bool carBodyShown = current_ui->CarBodyWnd() && current_ui->CarBodyWnd()->IsShown();
+			if (!actorMenuShown && !carBodyShown)
+			{
+				if (pIItem->m_pickup_sound_custom && pIItem->m_pickup_sound_custom.size())
+					pIItem->PlayPickupSound(EItemPickupPlayMode::World_3D);
+			}
 		}
 		else if (current_ui->GetCarbodyMenu() && current_ui->GetCarbodyMenu()->GetMenuMode() == mmDeadBodySearch)
 		{

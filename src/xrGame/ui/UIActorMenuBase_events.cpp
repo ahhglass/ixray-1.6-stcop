@@ -13,6 +13,8 @@
 #include "../InventoryWeaponSlotLayout.h"
 #include "../eatable_item_object.h"
 #include "../../xrUI/UICursor.h"
+#include "../item_pickup_sounds.h"
+#include "../Actor.h"
 
 void move_item_from_to(u16 from_id, u16 to_id, u16 what_id);
 
@@ -106,7 +108,7 @@ void CUIActorMenuBase::SendEvent_Item2Slot(PIItem pItem, u16 recipient, u16 slot
 	CGameObject::u_EventSend		(P);
 	clear_highlight_lists			();
 
-	PlaySnd							(eItemToSlot);
+	PlayItemMoveSound				(pItem, eItemToSlot);
 };
 
 void CUIActorMenuBase::SendEvent_Item2Belt(PIItem pItem, u16 recipient)
@@ -126,7 +128,7 @@ void CUIActorMenuBase::SendEvent_Item2Belt(PIItem pItem, u16 recipient)
 	CGameObject::u_EventSend		(P);
 	clear_highlight_lists			();
 
-	PlaySnd							(eItemToBelt);
+	PlayItemMoveSound				(pItem, eItemToBelt);
 };
 
 void CUIActorMenuBase::SendEvent_Item2Ruck(PIItem pItem, u16 recipient)
@@ -146,7 +148,7 @@ void CUIActorMenuBase::SendEvent_Item2Ruck(PIItem pItem, u16 recipient)
 	CGameObject::u_EventSend		(P);
 	clear_highlight_lists			();
 
-	PlaySnd							(eItemToRuck);
+	PlayItemMoveSound				(pItem, eItemToRuck);
 };
 
 void CUIActorMenuBase::SendEvent_Item_Eat(PIItem pItem, u16 recipient)
@@ -177,7 +179,7 @@ void CUIActorMenuBase::SendEvent_Item_Drop(PIItem pItem, u16 recipient)
 	pItem->object().u_EventGen	(P,GE_OWNERSHIP_REJECT,pItem->parent_id());
 	P.w_u16						(pItem->object().ID());
 	pItem->object().u_EventSend	(P);
-	PlaySnd						(eDropItem);
+	PlayItemMoveSound				(pItem, eDropItem);
 	clear_highlight_lists			();
 }
 
@@ -668,6 +670,8 @@ void CUIActorMenuBase::TakeAllFromPartner(CUIWindow* w, void* d)
 	}
 
 	GetPartnerList()->ClearAll(true); // false
+	// legacy 2D: ItemPickupSounds().PlayBulk(EItemPickupPlayMode::UI_2D);
+	ItemPickupSounds().PlayBulk(EItemPickupPlayMode::Actor_3D, Actor() ? Actor()->cast_game_object() : nullptr);
 	UpdateDeadBodyBag();
 }
 
@@ -717,6 +721,8 @@ void CUIActorMenuBase::TakeAllFromInventoryBox()
 
 	GetPartnerList()->ClearAll(true, IgnoredItemsIds); // FFx0001
 	IgnoredItemsIds.clear();
+	// legacy 2D: ItemPickupSounds().PlayBulk(EItemPickupPlayMode::UI_2D);
+	ItemPickupSounds().PlayBulk(EItemPickupPlayMode::Actor_3D, Actor() ? Actor()->cast_game_object() : nullptr);
 	UpdateDeadBodyBag();
 }
 
@@ -1045,6 +1051,8 @@ bool CUIActorMenuBase::ToBelt(CUICellItem* itm, bool b_use_cursor_pos)
 
 		if(!b_own_item)
 			SendEvent_Item2Belt				(iitem, GetInventoryOwner()->object_id());
+		else
+			PlayItemMoveSound				(iitem, eItemToBelt);
 
 		return								true;
 	}
@@ -1171,6 +1179,8 @@ void CUIActorMenuBase::TakeAllCurrentItem(u32 item_amount)
 		}
 	}
 
+	// legacy 2D: ItemPickupSounds().PlayBulk(EItemPickupPlayMode::UI_2D);
+	ItemPickupSounds().PlayBulk(EItemPickupPlayMode::Actor_3D, Actor() ? Actor()->cast_game_object() : nullptr);
 	UpdateDeadBodyBag();
 }
 
@@ -1257,6 +1267,10 @@ bool CUIActorMenuBase::ToActorTrade(CUICellItem* itm, bool b_use_cursor_pos)
 		{
 			SendEvent_Item2Ruck				(iitem, GetInventoryOwner()->object_id());
 		}
+		else
+		{
+			PlayItemMoveSound				(iitem, eItemToRuck);
+		}
 		if (GetPartner() || GetInvBox())
 		{
 			ColorizeItem(itm, m_currMenuMode == mmTrade ? !CanMoveToPartner(iitem) : false);
@@ -1318,6 +1332,8 @@ bool CUIActorMenuBase::ToPartnerTrade(CUICellItem* itm, bool b_use_cursor_pos)
 	else
 		new_owner->SetItem				(i);
 
+	PlayItemMoveSound					(iitem, eItemToRuck);
+
 	UpdatePrices();
 	return true;
 }
@@ -1360,6 +1376,9 @@ bool CUIActorMenuBase::ToPartnerTradeBag(CUICellItem* itm, bool b_use_cursor_pos
 		new_owner->SetItem(i, old_owner->GetDragItemPosition());
 	else
 		new_owner->SetItem(i);
+
+	PIItem iitem = (PIItem)i->m_pData;
+	PlayItemMoveSound(iitem, eItemToRuck);
 
 	UpdatePrices();
 	return true;
@@ -1457,6 +1476,8 @@ bool CUIActorMenuBase::ToDeadBodyBag(CUICellItem* itm, bool b_use_cursor_pos)
 	{
 		move_item_from_to				(GetInventoryOwner()->object_id(), GetInvBox()->ID(), iitem->object_id());
 	}
+
+	PlayItemMoveSound					(iitem, eItemToRuck);
 	
 	UpdateDeadBodyBag();
 	return true;

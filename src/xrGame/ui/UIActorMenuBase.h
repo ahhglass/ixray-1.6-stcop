@@ -80,6 +80,7 @@ protected:
 	void						InitSlots					(CUIXml& xml);
 	void						InitGamepadSelectors		();
 	void						PlaySnd						(eActorMenuSndAction a);
+	void						PlayItemMoveSound			(PIItem item, eActorMenuSndAction fallbackSound);
 
 								CUIActorMenuBase			();
 	virtual						~CUIActorMenuBase			();
