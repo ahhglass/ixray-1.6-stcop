@@ -246,7 +246,7 @@ void CHUDTarget::Render()
 							C = colorFriend; break;
 						}
 
-						if (!CInteractionMarkerManager::ShouldSuppressNpcName(PP.RQ.range))
+						if (!WSUI_ShouldHideNpcName(PP.RQ.range))
 						{
 							targetFont->SetColor(subst_alpha(C, static_cast<u32>(lerp(0.f, 255.f, accumulatedTime))));
 							targetFont->OutNext("%s", *g_pStringTable->translate(others_inv_owner->Name()));
@@ -256,7 +256,7 @@ void CHUDTarget::Render()
 				}
 				accumulatedTime += SHOW_INFO_SPEED * Device.fTimeDelta;
 			}
-			else if (l_pI && our_inv_owner && PP.RQ.range < 2.0f * 2.0f && !CInteractionMarkerManager::ShouldSuppressVanilla())
+			else if (l_pI && our_inv_owner && PP.RQ.range < 2.0f * 2.0f && !WSUI_ShouldHidePickupUI())
 			{
 				if (l_pI->NameItem() && l_pI->CanTake())
 				{

@@ -319,7 +319,7 @@ void CUISequencer::OnRender	()
 {
 	if (m_UIWindow->IsShown())
 	{
-		if (!CInteractionMarkerManager::ShouldSuppressTutorialUi())
+		if (!WSUI_ShouldHideTutorialUI())
 			m_UIWindow->Draw();
 	}
 

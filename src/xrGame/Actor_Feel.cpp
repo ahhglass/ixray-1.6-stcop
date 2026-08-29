@@ -218,7 +218,7 @@ void CActor::PickupModeUpdate_COD()
 
 	if (!g_dedicated_server)
 	{
-		if (CInteractionMarkerManager::ShouldSuppressVanilla())
+		if (WSUI_ShouldHidePickupUI())
 			CurrentGameUI()->UIMainIngameWnd->SetPickUpItem(nullptr);
 		else
 			CurrentGameUI()->UIMainIngameWnd->SetPickUpItem(pNearestItem);

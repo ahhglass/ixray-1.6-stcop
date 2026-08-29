@@ -268,15 +268,16 @@ public:
 	bool GetScriptBool(LPCSTR key) const;
 	void SetScriptBool(LPCSTR key, bool value);
 	bool IsConfigLoaded() const { return m_config_loaded; }
+	bool IsRuntimeEnabled() const;
 
 	static bool IsEnabled();
-	static bool ShouldSuppressVanilla();
-	static bool ShouldSuppressNpcName(float distance);
-	static bool ShouldSuppressTutorialUi();
+
+	bool ShouldSuppressNpcNameAtDistance(float distance) const;
+	bool ShouldSuppressTutorialUiWhenActive() const;
 
 private:
-	bool IsRuntimeEnabled() const;
 	void ClearMarkerState();
+	void EnsureQuestSchemeIndex();
 
 	void LoadClassDefs();
 	void LoadLookupSection(LPCSTR section_name, bool is_pos_adj);
@@ -336,7 +337,6 @@ private:
 	float GetDotDistanceAlpha(float distance, float show_distance) const;
 	float GetMarkerSortScore(u16 id, const SInteractionMarker& marker) const;
 	LPCSTR ResolveKeyBindIcon(int dik, float& out_w, float& out_h) const;
-	void LoadDikIcons();
 	void LoadDikIconsLtx();
 	u32 GetItemConditionColor(float condition) const;
 	u32 CountGroupedItemMarkers(const SInteractionMarker& focus_marker) const;
@@ -384,8 +384,8 @@ private:
 	bool m_config_loaded = false;
 	s8 m_script_enabled_override = -1;
 	bool m_enabled = false;
-	bool m_suppress_vanilla = true;
 	bool m_suppress_tutorial_ui = true;
+	bool m_quest_scheme_index_built = false;
 	bool m_hide_mute_stalkers = true;
 	bool m_enable_quest_scheme_scan = true;
 	bool m_focus_sound_loaded = false;
@@ -443,3 +443,31 @@ private:
 };
 
 extern CInteractionMarkerManager* g_pInteractionMarkerManager;
+
+// WSUI активен: конфиг загружен + runtime enabled
+IC bool WSUI_IsActive()
+{
+	return g_pInteractionMarkerManager
+		&& g_pInteractionMarkerManager->IsConfigLoaded()
+		&& g_pInteractionMarkerManager->IsRuntimeEnabled();
+}
+
+// Фасад подавления ванильного UI
+IC bool WSUI_ShouldHidePickupUI()
+{
+	return WSUI_IsActive();
+}
+
+IC bool WSUI_ShouldHideNpcName(float distance)
+{
+	return g_pInteractionMarkerManager
+		&& WSUI_IsActive()
+		&& g_pInteractionMarkerManager->ShouldSuppressNpcNameAtDistance(distance);
+}
+
+IC bool WSUI_ShouldHideTutorialUI()
+{
+	return g_pInteractionMarkerManager
+		&& WSUI_IsActive()
+		&& g_pInteractionMarkerManager->ShouldSuppressTutorialUiWhenActive();
+}

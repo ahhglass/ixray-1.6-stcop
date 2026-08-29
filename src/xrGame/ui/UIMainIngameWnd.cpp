@@ -1280,7 +1280,7 @@ void CUIMainIngameWnd::Update()
 
 void CUIMainIngameWnd::RenderQuickInfos()
 {
-	if (CInteractionMarkerManager::ShouldSuppressVanilla())
+	if (WSUI_ShouldHidePickupUI())
 	{
 		if (UIStaticQuickHelp)
 			UIStaticQuickHelp->Show(false);
@@ -1564,7 +1564,7 @@ void CUIMainIngameWnd::SetPickUpItem	(CInventoryItem* PickUpItem)
 
 void CUIMainIngameWnd::UpdatePickUpItem	()
 {
-	if (CInteractionMarkerManager::ShouldSuppressVanilla())
+	if (WSUI_ShouldHidePickupUI())
 	{
 		UIPickUpItemIcon->Show(false);
 		return;

@@ -24,7 +24,7 @@ CPickUpManager::CPickUpManager(CActor* NewOwner) :
 
 void CPickUpManager::RenderInfo()
 {
-	if (CInteractionMarkerManager::ShouldSuppressVanilla())
+	if (WSUI_ShouldHidePickupUI())
 		return;
 
 	Owner->feel_touch_update(Owner->cam_FirstEye()->vPosition, PickupInfoRadius);

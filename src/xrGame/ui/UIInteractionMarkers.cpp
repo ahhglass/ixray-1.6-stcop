@@ -93,17 +93,7 @@ namespace
 		}
 	}
 
-	LPCSTR TranslateIfExists(LPCSTR string_id, LPCSTR fallback)
-	{
-		if (!string_id || !string_id[0])
-			return fallback;
-
-		LPCSTR translated = g_pStringTable->translate(string_id).c_str();
-		if (translated && translated[0] && xr_strcmp(translated, string_id) != 0)
-			return translated;
-
-		return fallback;
-	}
+	static const LPCSTR g_door_bones[] = { "door_right", "door_left", "lock", "door", nullptr };
 
 	LPCSTR WsuiString(LPCSTR id)
 	{
@@ -165,7 +155,7 @@ bool CInteractionMarkerManager::IsRuntimeEnabled() const
 
 bool CInteractionMarkerManager::IsEnabled()
 {
-	return g_pInteractionMarkerManager && g_pInteractionMarkerManager->IsRuntimeEnabled();
+	return WSUI_IsActive();
 }
 
 void CInteractionMarkerManager::ClearMarkerState()
@@ -200,7 +190,6 @@ bool CInteractionMarkerManager::GetScriptBool(LPCSTR key) const
 	if (!key || !key[0])
 		return false;
 
-	if (!xr_strcmp(key, "suppress_vanilla")) return m_suppress_vanilla;
 	if (!xr_strcmp(key, "hide_dots")) return m_markers_cfg.features.hide_dots;
 	if (!xr_strcmp(key, "wheel_cycle_pickups")) return m_markers_cfg.features.wheel_cycle_pickups;
 	if (!xr_strcmp(key, "enable_task_icons")) return m_markers_cfg.features.enable_task_icons;
@@ -218,8 +207,7 @@ void CInteractionMarkerManager::SetScriptBool(LPCSTR key, bool value)
 	if (!key || !key[0] || !m_config_loaded)
 		return;
 
-	if (!xr_strcmp(key, "suppress_vanilla")) m_suppress_vanilla = value;
-	else if (!xr_strcmp(key, "hide_dots")) m_markers_cfg.features.hide_dots = value;
+	if (!xr_strcmp(key, "hide_dots")) m_markers_cfg.features.hide_dots = value;
 	else if (!xr_strcmp(key, "wheel_cycle_pickups")) m_markers_cfg.features.wheel_cycle_pickups = value;
 	else if (!xr_strcmp(key, "enable_task_icons")) m_markers_cfg.features.enable_task_icons = value;
 	else if (!xr_strcmp(key, "enable_focus_sound")) m_markers_cfg.features.enable_focus_sound = value;
@@ -229,41 +217,42 @@ void CInteractionMarkerManager::SetScriptBool(LPCSTR key, bool value)
 	else if (!xr_strcmp(key, "keybind")) m_prompt_cfg.features.keybind = value;
 }
 
-bool CInteractionMarkerManager::ShouldSuppressVanilla()
+bool CInteractionMarkerManager::ShouldSuppressTutorialUiWhenActive() const
 {
-	// WSUI on → hide legacy pickup/help UI; WSUI off → vanilla returns.
-	return IsEnabled();
-}
-
-bool CInteractionMarkerManager::ShouldSuppressTutorialUi()
-{
-	if (!IsEnabled() || !g_pInteractionMarkerManager || !g_pInteractionMarkerManager->m_suppress_tutorial_ui)
+	if (!m_suppress_tutorial_ui)
 		return false;
 
-	LPCSTR tutorial_name = g_pInteractionMarkerManager->GetActiveTutorialName();
-	return tutorial_name && g_pInteractionMarkerManager->HasTutorialPromptMapping(tutorial_name);
+	LPCSTR tutorial_name = GetActiveTutorialName();
+	return tutorial_name && HasTutorialPromptMapping(tutorial_name);
 }
 
-bool CInteractionMarkerManager::ShouldSuppressNpcName(float distance)
+bool CInteractionMarkerManager::ShouldSuppressNpcNameAtDistance(float distance) const
 {
-	if (!ShouldSuppressVanilla() || !g_pInteractionMarkerManager)
-		return false;
-
 	const u32 idx = static_cast<u32>(EWSUIClass::Npc);
 	if (idx >= static_cast<u32>(EWSUIClass::Count))
 		return false;
 
-	const SWSUIClassDef& def = g_pInteractionMarkerManager->m_classes[idx];
+	const SWSUIClassDef& def = m_classes[idx];
 	if (!def.enabled)
 		return false;
 
 	return distance <= def.show_distance;
 }
 
+void CInteractionMarkerManager::EnsureQuestSchemeIndex()
+{
+	// Ленивый индекс квестовых схем - один раз за сессию, при первом Scan
+	if (!m_enable_quest_scheme_scan || m_quest_scheme_index_built)
+		return;
+
+	BuildQuestSchemeIndex();
+	m_quest_scheme_index_built = true;
+}
+
 void CInteractionMarkerManager::Load()
 {
+	// Сброс состояния перед загрузкой конфигов
 	m_enabled = false;
-	m_suppress_vanilla = true;
 	m_markers.clear();
 	m_los_rr_order.clear();
 	m_los_rr_cursor = 0;
@@ -293,13 +282,14 @@ void CInteractionMarkerManager::Load()
 	m_dik_icons.clear();
 	m_config_loaded = false;
 	m_script_enabled_override = -1;
+	m_quest_scheme_index_built = false;
 
 	if (!pSettings->section_exist("wsui"))
 		return;
 
+	// LTX: флаги и путь к ui_xml
 	m_enabled = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enabled", false);
 
-	m_suppress_vanilla = READ_IF_EXISTS(pSettings, r_bool, "wsui", "suppress_vanilla", true);
 	m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "ui_xml", nullptr);
 	if (!m_ui_xml.size())
 		m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "prompt_ui_xml", "ui_wsui.xml");
@@ -308,6 +298,7 @@ void CInteractionMarkerManager::Load()
 	m_enable_quest_scheme_scan = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_quest_scheme_scan", true);
 	LoadWsuiXml();
 	LoadFocusSound();
+	// XML: маркеры, промпт, классы, dik_icons; LTX: lookup-таблицы
 	if (!m_dik_icons_from_xml)
 		LoadDikIconsLtx();
 	if (!m_classes_from_xml)
@@ -321,9 +312,6 @@ void CInteractionMarkerManager::Load()
 	LoadTextureLookupSection("zone_textures_by_name", m_zone_textures_by_name);
 	LoadTextureLookupSection("zone_prompts_by_name", m_zone_prompts_by_name);
 	LoadTextureLookupSection("tutorial_prompts_by_name", m_tutorial_prompts_by_name);
-
-	if (m_enable_quest_scheme_scan)
-		BuildQuestSchemeIndex();
 
 	if (pSettings->section_exist("breakable_box_visuals"))
 	{
@@ -714,7 +702,7 @@ LPCSTR CInteractionMarkerManager::ResolveBoneName(CGameObject* obj, EWSUIClass c
 	if (!obj)
 		return nullptr;
 
-	// Ground items / zones: center marker is more reliable than bones
+	// Предметы, костры, зоны - центр объекта надежнее костей
 	if (cls == EWSUIClass::Item || cls == EWSUIClass::Campfire || cls == EWSUIClass::Zone)
 		return nullptr;
 
@@ -755,10 +743,9 @@ bool CInteractionMarkerManager::IsDoorObject(CGameObject* obj) const
 
 	if (IKinematics* kinematics = PKinematics(obj->Visual()))
 	{
-		static const LPCSTR door_bones[] = { "door_right", "door_left", "lock", "door", nullptr };
-		for (u32 i = 0; door_bones[i]; ++i)
+		for (u32 i = 0; g_door_bones[i]; ++i)
 		{
-			if (kinematics->LL_BoneID(door_bones[i]) != BI_NONE)
+			if (kinematics->LL_BoneID(g_door_bones[i]) != BI_NONE)
 				return true;
 		}
 	}
@@ -823,11 +810,10 @@ LPCSTR CInteractionMarkerManager::ResolveDoorBone(CGameObject* obj) const
 
 	if (IKinematics* kinematics = PKinematics(obj->Visual()))
 	{
-		static const LPCSTR door_bones[] = { "door_right", "door_left", "lock", "door", nullptr };
-		for (u32 i = 0; door_bones[i]; ++i)
+		for (u32 i = 0; g_door_bones[i]; ++i)
 		{
-			if (kinematics->LL_BoneID(door_bones[i]) != BI_NONE)
-				return door_bones[i];
+			if (kinematics->LL_BoneID(g_door_bones[i]) != BI_NONE)
+				return g_door_bones[i];
 		}
 	}
 
@@ -848,6 +834,7 @@ float CInteractionMarkerManager::GetDoorVisualYOffset(CGameObject* obj) const
 
 shared_str CInteractionMarkerManager::ResolveActiveTexture(CGameObject* obj, EWSUIClass cls, const SWSUIClassDef& def, bool focused) const
 {
+	// Спец-иконки по типу объекта, затем роли NPC, зоны, задания
 	if (m_markers_cfg.features.special_icons_always && obj)
 	{
 		if (cls == EWSUIClass::Item && IsExplosiveObject(obj))
@@ -1139,6 +1126,8 @@ void CInteractionMarkerManager::Scan(CActor* actor)
 {
 	if (!actor)
 		return;
+
+	EnsureQuestSchemeIndex();
 
 	xr_set<u16> found_ids;
 	const Fvector& origin = actor->Position();
