@@ -52,6 +52,22 @@ struct SInteractionMarker
 	u32 los_check_time = 0;
 };
 
+struct SWSUIItemCardMetric
+{
+	float x = 0.f;
+	float y = 0.f;
+	float icon_x = 0.f;
+	float icon_y = 0.f;
+	float icon_w = 0.f;
+	float icon_h = 0.f;
+	float text_x = 0.f;
+	float text_y = 0.f;
+	shared_str icon;
+	shared_str font_name;
+	CGameFont* font = nullptr;
+	u32 color = 0;
+};
+
 struct SWSUIPromptParts
 {
 	bool split = false;
@@ -71,6 +87,7 @@ public:
 	void Load();
 	void Update();
 	void OnRender();
+	void OnMouseWheel(int direction);
 
 	static bool IsEnabled();
 	static bool ShouldSuppressVanilla();
@@ -109,7 +126,14 @@ private:
 	LPCSTR ResolveTutorialPrompt(LPCSTR tutorial_name) const;
 	bool HasTutorialPromptMapping(LPCSTR tutorial_name) const;
 	void SanitizeActionText(string512& text) const;
-	void RenderPromptBubble(float cx, float cy, const SWSUIPromptParts& parts, LPCSTR key_name, float alpha, bool center_anchor) const;
+	void RenderPromptBubble(float cx, float cy, const SWSUIPromptParts& parts, LPCSTR key_name, float alpha, bool center_anchor, const SInteractionMarker* marker = nullptr) const;
+	void RenderItemCard(float panel_left, float panel_bottom, CInventoryItem* item, float alpha) const;
+	void LoadItemCardMetric(CUIXml& xml, LPCSTR path, SWSUIItemCardMetric& out) const;
+	float GetDotDistanceScale(float distance, float show_distance) const;
+	float GetDotDistanceAlpha(float distance, float show_distance) const;
+	float GetMarkerSortScore(u16 id, const SInteractionMarker& marker) const;
+	LPCSTR ResolveKeyBindIcon(int dik, float& out_w, float& out_h) const;
+	void LoadDikIcons();
 	u32 GetItemConditionColor(float condition) const;
 	u32 CountGroupedItemMarkers(const SInteractionMarker& focus_marker) const;
 	float PromptTextWidth(CGameFont* font, LPCSTR text, float kx) const;
@@ -159,6 +183,18 @@ private:
 	bool m_focus_sound_loaded = false;
 	bool m_enable_item_stack_count = true;
 	bool m_enable_item_condition = true;
+	bool m_enable_special_icons_always = true;
+	bool m_enable_item_card = true;
+	bool m_dot_distance_scale = true;
+	bool m_dot_distance_fade = true;
+	bool m_hide_dots = false;
+	bool m_wheel_cycle_pickups = true;
+	bool m_prompt_fixed = false;
+	float m_dot_min_scale = 0.6f;
+	float m_dot_max_scale = 1.f;
+	float m_dot_min_alpha = 0.45f;
+	float m_marker_priority_task = 10000.f;
+	float m_marker_priority_npc = 3000.f;
 	float m_scan_radius = 5.f;
 	float m_prompt_distance = 4.f;
 	u32 m_max_markers = 10;
@@ -184,49 +220,66 @@ private:
 	float m_font_scale_w = 1.f;
 	float m_font_scale_h = 1.f;
 	float m_anchor_x = 0.f;
-	float m_anchor_y = 20.f;
+	float m_anchor_y = 0.f;
 	float m_key_text_x = 0.f;
 	float m_key_text_y = 0.f;
 	float m_verb_text_x = 0.f;
 	float m_verb_text_y = 0.f;
 	float m_full_text_x = 0.f;
 	float m_full_text_y = 0.f;
-	float m_tutorial_x = 512.f;
-	float m_tutorial_y = 660.f;
+	float m_tutorial_x = 0.f;
+	float m_tutorial_y = 0.f;
+	float m_prompt_fixed_x = 0.f;
+	float m_prompt_fixed_y = 0.f;
 
 	shared_str m_prompt_drop_texture;
 	shared_str m_prompt_keybind_texture;
 	shared_str m_prompt_keybind_pressed_texture;
-	float m_prompt_drop_height = 20.f;
-	float m_prompt_keybind_w = 15.f;
-	float m_prompt_keybind_h = 20.f;
-	float m_prompt_text_pad = 4.f;
-	float m_item_group_distance = 50.f;
-	float m_item_condition_line_spacing = 1.2f;
+	shared_str m_item_card_drop_texture;
+	float m_item_card_x = 0.f;
+	float m_item_card_y = 0.f;
+	float m_item_card_drop_w = 0.f;
+	float m_item_card_drop_h = 0.f;
+	SWSUIItemCardMetric m_item_card_weight;
+	SWSUIItemCardMetric m_item_card_value;
+	float m_keybind_icon_w = 0.f;
+	float m_keybind_icon_h = 0.f;
+	float m_prompt_drop_height = 0.f;
+	float m_prompt_keybind_w = 0.f;
+	float m_prompt_keybind_h = 0.f;
+	float m_prompt_text_pad = 0.f;
+	float m_item_group_distance = 0.f;
+	float m_item_condition_line_spacing = 0.f;
 	float m_condition_text_x = 0.f;
 	float m_condition_text_y = 0.f;
-	u32 m_item_condition_color_min = 0xFFFF0000;
-	u32 m_item_condition_color_max = 0xFF00FF00;
-	u32 m_popin_anim_dur = 500;
-	u32 m_prompt_fade_in_time = 250;
-	u32 m_prompt_fade_out_time = 150;
+	bool m_condition_drop_enabled = false;
+	shared_str m_condition_drop_texture;
+	float m_condition_drop_w = 0.f;
+	float m_condition_drop_h = 0.f;
+	float m_condition_drop_pad = 0.f;
+	u32 m_condition_drop_color = 0;
+	u32 m_item_condition_color_min = 0;
+	u32 m_item_condition_color_max = 0;
+	u32 m_popin_anim_dur = 0;
+	u32 m_prompt_fade_in_time = 0;
+	u32 m_prompt_fade_out_time = 0;
 
 	shared_str m_prompt_ui_xml;
-	shared_str m_prompt_key_font_name = "font_oswald_semibold_22";
-	shared_str m_prompt_verb_font_name = "font_oswald_20";
-	shared_str m_prompt_name_font_name = "font_oswald_20";
-	shared_str m_prompt_full_font_name = "font_oswald_20";
-	shared_str m_prompt_condition_font_name = "font_oswald_18";
+	shared_str m_prompt_key_font_name;
+	shared_str m_prompt_verb_font_name;
+	shared_str m_prompt_name_font_name;
+	shared_str m_prompt_full_font_name;
+	shared_str m_prompt_condition_font_name;
 	CGameFont* m_prompt_key_font = nullptr;
 	CGameFont* m_prompt_verb_font = nullptr;
 	CGameFont* m_prompt_name_font = nullptr;
 	CGameFont* m_prompt_full_font = nullptr;
 	CGameFont* m_prompt_condition_font = nullptr;
-	u32 m_prompt_key_color = 0xFF000000;
-	u32 m_prompt_verb_color = 0xFFDDDDDD;
-	u32 m_prompt_name_color = 0xFFE1E1FA;
-	u32 m_prompt_full_color = 0xFFDDDDDD;
-	u32 m_prompt_condition_color = 0xFFDDDDDD;
+	u32 m_prompt_key_color = 0;
+	u32 m_prompt_verb_color = 0;
+	u32 m_prompt_name_color = 0;
+	u32 m_prompt_full_color = 0;
+	u32 m_prompt_condition_color = 0;
 
 	HUD_SOUND_ITEM m_focus_snd;
 
@@ -242,9 +295,12 @@ private:
 	xr_set<shared_str> m_quest_scheme_stories;
 	xr_set<shared_str> m_breakable_box_visuals;
 	xr_vector<shared_str> m_bone_priority;
+	xr_map<int, shared_str> m_dik_icons;
 
 	xr_map<u16, SInteractionMarker> m_markers;
 	u16 m_focus_id = 0xffff;
+	u16 m_engine_focus_id = 0xffff;
+	u16 m_wheel_focus_id = 0xffff;
 	u16 m_prev_focus_id = 0xffff;
 	u16 m_popin_focus_id = 0xffff;
 	u32 m_popin_start_time = 0;

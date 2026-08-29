@@ -25,6 +25,7 @@
 #include "../xrScripts/script_callback_ex.h"
 #include "ui/UIPdaWnd.h"
 #include "HudPdaAnimator.h"
+#include "ui/UIInteractionMarkers.h"
 
 //Alundaio
 #include "pch_script.h"
@@ -57,6 +58,11 @@ void CLevel::IR_OnMouseWheel( int direction )
 	/* avo: script callback */
 	if (g_actor) g_actor->callback(GameObject::eMouseWheel)(direction);
 	/* avo: end */
+
+	if (g_pInteractionMarkerManager && g_pInteractionMarkerManager->IsEnabled())
+	{
+		g_pInteractionMarkerManager->OnMouseWheel(direction);
+	}
 
 	if (CurrentGameUI()->IR_UIOnMouseWheel(direction)) return;
 	if( Device.Paused()
