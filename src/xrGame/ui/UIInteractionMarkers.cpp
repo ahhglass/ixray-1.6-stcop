@@ -11,6 +11,7 @@
 #include "../InventoryOwner.h"
 #include "../UsableScriptObject.h"
 #include "../entity_alive.h"
+#include "../monster_community.h"
 #include "../ai/monsters/basemonster/base_monster.h"
 #include "../ai/stalker/ai_stalker.h"
 #include "../PhysicObject.h"
@@ -45,6 +46,7 @@
 #include "ui/UIGameTutorial.h"
 #include "../../xrCore/LocatorAPI_defs.h"
 #include "../../xrCore/LocatorAPI.h"
+#include "../../xrCore/EngineExternal.h"
 
 extern ENGINE_API xr_atomic_bool g_bRendering;
 
@@ -115,6 +117,130 @@ namespace
 		{
 			if (short_name[0])
 				return short_name;
+		}
+
+		return nullptr;
+	}
+
+	bool CorpseHasInventoryItems(CInventoryOwner* owner)
+	{
+		return owner && owner->inventory().dwfGetObjectCount() > 0;
+	}
+
+	bool MonstersInventoryEnabled()
+	{
+		return EngineExternal()[EEngineExternalGame::EnableMonstersInventory];
+	}
+
+	bool ShouldShowMonsterCorpse(CGameObject* obj)
+	{
+		if (!obj || !MonstersInventoryEnabled())
+			return false;
+
+		CInventoryOwner* owner = obj->cast_inventory_owner();
+		if (!owner || owner->deadbody_closed_status())
+			return false;
+
+		return CorpseHasInventoryItems(owner);
+	}
+
+	LPCSTR TryWsuiCreatureString(LPCSTR section)
+	{
+		if (!section || !section[0])
+			return nullptr;
+
+		string64 key;
+		xr_sprintf(key, "ui_st_wsui_creature_%s", section);
+		LPCSTR translated = WsuiString(key);
+		if (translated && translated[0] && xr_strcmp(translated, key) != 0)
+			return translated;
+
+		return nullptr;
+	}
+
+	static const LPCSTR g_creature_rank_suffixes[] = { "_strong", "_weak", "_normal", nullptr };
+
+	LPCSTR ResolveCreatureSpeciesName(LPCSTR section)
+	{
+		if (LPCSTR name = TryWsuiCreatureString(section))
+			return name;
+
+		if (!section || !section[0])
+			return nullptr;
+
+		for (u32 i = 0; g_creature_rank_suffixes[i]; ++i)
+		{
+			LPCSTR suffix = g_creature_rank_suffixes[i];
+			const size_t slen = xr_strlen(section);
+			const size_t xlen = xr_strlen(suffix);
+			if (slen > xlen && !xr_strcmp(section + slen - xlen, suffix))
+			{
+				string64 base;
+				xr_strcpy(base, sizeof(base), section);
+				base[slen - xlen] = 0;
+				if (LPCSTR name = TryWsuiCreatureString(base))
+					return name;
+			}
+		}
+
+		return nullptr;
+	}
+
+	// Имя трупа: персонаж, локализованная секция, community, вид мутанта
+	LPCSTR BodyDisplayName(CGameObject* obj)
+	{
+		if (!obj)
+			return nullptr;
+
+		if (CInventoryOwner* owner = obj->cast_inventory_owner())
+		{
+			LPCSTR owner_name = owner->Name();
+			LPCSTR spawn_name = obj->cName().c_str();
+			if (owner_name && owner_name[0] && xr_strcmp(owner_name, spawn_name) != 0)
+				return owner_name;
+		}
+
+		LPCSTR section = obj->cNameSect().c_str();
+		if (!section || !section[0])
+			return nullptr;
+
+		if (LPCSTR translated = WsuiString(section))
+		{
+			if (xr_strcmp(translated, section) != 0)
+				return translated;
+		}
+
+		if (pSettings->line_exist(section, "inv_name"))
+		{
+			LPCSTR inv_id = pSettings->r_string(section, "inv_name");
+			if (LPCSTR translated = WsuiString(inv_id))
+				return translated;
+		}
+
+		if (pSettings->line_exist(section, "community"))
+		{
+			LPCSTR comm = pSettings->r_string(section, "community");
+			if (LPCSTR translated = WsuiString(comm))
+			{
+				if (xr_strcmp(translated, comm) != 0)
+					return translated;
+			}
+		}
+
+		if (LPCSTR species = ResolveCreatureSpeciesName(section))
+			return species;
+
+		if (CEntityAlive* alive = obj->cast_entity_alive())
+		{
+			if (alive->monster_community && alive->monster_community->id().size())
+			{
+				LPCSTR comm = alive->monster_community->id().c_str();
+				if (LPCSTR translated = WsuiString(comm))
+				{
+					if (xr_strcmp(translated, comm) != 0)
+						return translated;
+				}
+			}
 		}
 
 		return nullptr;
@@ -969,7 +1095,13 @@ EWSUIClass CInteractionMarkerManager::ClassifyObject(CGameObject* obj) const
 		if (CEntityAlive* alive = monster->cast_entity_alive())
 		{
 			if (!alive->g_Alive())
+			{
+				if (HasUsableTip(obj))
+					return EWSUIClass::Usable;
+				if (!ShouldShowMonsterCorpse(obj))
+					return EWSUIClass::None;
 				return EWSUIClass::Body;
+			}
 		}
 	}
 
@@ -2502,7 +2634,7 @@ bool CInteractionMarkerManager::BuildPromptParts(CActor* actor, const SInteracti
 	case EWSUIClass::Body:
 	{
 		xr_strcpy(out.verb, WsuiString("ui_st_wsui_search"));
-		if (LPCSTR name = game_object->Name())
+		if (LPCSTR name = BodyDisplayName(game_object))
 			xr_strcpy(out.name, name);
 		out.split = true;
 		return out.verb[0] != 0;
