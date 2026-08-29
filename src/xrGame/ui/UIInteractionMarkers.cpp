@@ -2015,6 +2015,7 @@ void CInteractionMarkerManager::LoadPromptLayout(CUIXml& xml)
 	m_prompt_cfg.font_scale_w = xml.ReadAttribFlt(root, 0, "font_scale_w", 0.f);
 	m_prompt_cfg.font_scale_h = xml.ReadAttribFlt(root, 0, "font_scale_h", 0.f);
 	m_prompt_cfg.text_pad = xml.ReadAttribFlt(root, 0, "text_pad", 0.f);
+	CUIXmlInit::ReadShadowsNode(xml, root, 0, m_prompt_cfg.default_text_shadow);
 
 	if (xml.NavigateToNode("wsui_prompt:anchor", 0))
 	{
@@ -2066,6 +2067,8 @@ void CInteractionMarkerManager::LoadTextLabel(CUIXml& xml, LPCSTR path, SWSUITex
 		out.font = loaded_font;
 		out.color = color;
 	}
+
+	CUIXmlInit::ReadShadowsNode(xml, path, 0, out.text_shadow);
 }
 
 void CInteractionMarkerManager::LoadBackground(CUIXml& xml, LPCSTR path, SWSUIBackground& out, bool read_enable)
@@ -2207,6 +2210,8 @@ void CInteractionMarkerManager::LoadItemCardMetric(CUIXml& xml, LPCSTR path, SWS
 	}
 	else if (g_FontManager && g_FontManager->pFontSystem)
 		out.font = g_FontManager->pFontSystem;
+
+	CUIXmlInit::ReadShadowsNode(xml, path, 0, out.text_shadow);
 }
 
 void CInteractionMarkerManager::LoadFocusSound()
@@ -2578,6 +2583,44 @@ float CInteractionMarkerManager::PromptTextHeight(CGameFont* font, float ky) con
 	return (font->CurrentHeight_() * m_prompt_cfg.font_scale_h) / ky;
 }
 
+const SUIOutlineParams& CInteractionMarkerManager::ResolveTextShadow(const SUIOutlineParams& label_shadow) const
+{
+	if (label_shadow.enabled)
+		return label_shadow;
+	return m_prompt_cfg.default_text_shadow;
+}
+
+void CInteractionMarkerManager::DrawPromptText(CGameFont* font, float x, float y, float kx, float ky, LPCSTR text, u32 color, CGameFont::EAligment align, const SUIOutlineParams& label_shadow) const
+{
+	if (!font || !text || !text[0])
+		return;
+
+	font->SetAligment(align);
+
+	const SUIOutlineParams& shadow = ResolveTextShadow(label_shadow);
+	const u32 textAlpha = color_get_A(color);
+	u32 outlineColor = 0;
+	if (shadow.enabled && shadow.thickness > 0.f && textAlpha > 0)
+	{
+		const u32 outlineAlpha = (color_get_A(shadow.color) * textAlpha) / 255;
+		if (outlineAlpha > 0)
+			outlineColor = subst_alpha(shadow.color, outlineAlpha);
+	}
+
+	if (outlineColor != 0)
+	{
+		for (const Fvector2& d : UIOutline::kDirs8)
+		{
+			font->SetColor(outlineColor);
+			font->Out(x + d.x * shadow.thickness * kx, y + d.y * shadow.thickness * ky, "%s", text);
+		}
+	}
+
+	font->SetColor(color);
+	font->Out(x, y, "%s", text);
+	font->OnRender();
+}
+
 namespace
 {
 bool IsUseKeyPressed()
@@ -2678,11 +2721,12 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 			DrawTextureMarker(key_tex, key_cx, content_cy, key_w, key_h, ColorWithAlpha(0xFFFFFFFF, alpha), true);
 
 			const float font_h = key_font->CurrentHeight_() * m_prompt_cfg.font_scale_h;
-			key_font->SetAligment(CGameFont::alCenter);
-			key_font->SetColor(ColorWithAlpha(kb.label.color, alpha));
-			key_font->Out((key_cx + kb.label.x * scale) * kx,
-				content_cy * ky - font_h * 0.5f + kb.label.y * scale, "%s", key_name);
-			key_font->OnRender();
+			DrawPromptText(key_font,
+				(key_cx + kb.label.x * scale) * kx,
+				content_cy * ky - font_h * 0.5f + kb.label.y * scale,
+				kx, ky, key_name,
+				ColorWithAlpha(kb.label.color, alpha),
+				CGameFont::alCenter, kb.label.text_shadow);
 		}
 		cursor_x += key_w + gap;
 	}
@@ -2694,27 +2738,21 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 
 	if (parts.split)
 	{
-		verb_font->SetAligment(CGameFont::alLeft);
-		verb_font->SetColor(ColorWithAlpha(at.verb.color, alpha));
-		verb_font->Out(text_x, text_y, "%s", parts.verb);
+		DrawPromptText(verb_font, text_x, text_y, kx, ky, parts.verb,
+			ColorWithAlpha(at.verb.color, alpha), CGameFont::alLeft, at.verb.text_shadow);
 
 		float segment_x = text_x + verb_font->WidthOf(parts.verb) * m_prompt_cfg.font_scale_w;
 		if (parts.name[0])
 		{
 			segment_x += verb_font->WidthOf(" ") * m_prompt_cfg.font_scale_w;
-			name_font->SetAligment(CGameFont::alLeft);
-			name_font->SetColor(ColorWithAlpha(at.object_name.color, alpha));
-			name_font->Out(segment_x, text_y, "%s", parts.name);
-			name_font->OnRender();
+			DrawPromptText(name_font, segment_x, text_y, kx, ky, parts.name,
+				ColorWithAlpha(at.object_name.color, alpha), CGameFont::alLeft, at.object_name.text_shadow);
 		}
-		verb_font->OnRender();
 	}
 	else
 	{
-		full_font->SetAligment(CGameFont::alLeft);
-		full_font->SetColor(ColorWithAlpha(at.full_line.color, alpha));
-		full_font->Out(text_x, text_y, "%s", parts.full);
-		full_font->OnRender();
+		DrawPromptText(full_font, text_x, text_y, kx, ky, parts.full,
+			ColorWithAlpha(at.full_line.color, alpha), CGameFont::alLeft, at.full_line.text_shadow);
 	}
 
 	if (parts.show_condition)
@@ -2758,10 +2796,9 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 				DrawTextureMarker(cond_cfg.background.texture, cond_drop_cx, cond_drop_cy, cond_drop_w, drop_h_cond, ColorWithAlpha(drop_color, alpha), false);
 			}
 
-			cond_font->SetAligment(CGameFont::alLeft);
-			cond_font->SetColor(ColorWithAlpha(GetItemConditionColor(parts.item_condition), alpha));
-			cond_font->Out(cond_x, cond_y + cond_h * (cond_cfg.line_spacing - 1.f), "%s", cond_text);
-			cond_font->OnRender();
+			DrawPromptText(cond_font, cond_x, cond_y + cond_h * (cond_cfg.line_spacing - 1.f), kx, ky, cond_text,
+				ColorWithAlpha(GetItemConditionColor(parts.item_condition), alpha),
+				CGameFont::alLeft, cond_cfg.label.text_shadow);
 		}
 	}
 
@@ -2863,10 +2900,10 @@ void CInteractionMarkerManager::RenderItemCard(float panel_left, float panel_bot
 
 		if (text && text[0] && font)
 		{
-			font->SetAligment(CGameFont::alLeft);
-			font->SetColor(ColorWithAlpha(metric.color, alpha));
-			font->Out((mx + metric.text_x * scale) * kx, (my + metric.text_y * scale) * ky, "%s", text);
-			font->OnRender();
+			DrawPromptText(font,
+				(mx + metric.text_x * scale) * kx, (my + metric.text_y * scale) * ky,
+				kx, ky, text, ColorWithAlpha(metric.color, alpha),
+				CGameFont::alLeft, metric.text_shadow);
 		}
 	};
 

@@ -3,6 +3,7 @@
 #include "../xrCore/_stl_extensions.h"
 #include "../xrCore/_vector2.h"
 #include "../HudSound.h"
+#include "../../xrUI/ui_defs.h"
 
 class CGameObject;
 class CGameFont;
@@ -67,6 +68,7 @@ struct SWSUIItemCardMetric
 	shared_str font_name;
 	CGameFont* font = nullptr;
 	u32 color = 0;
+	SUIOutlineParams text_shadow = {};
 };
 
 struct SWSUITextLabel
@@ -76,6 +78,7 @@ struct SWSUITextLabel
 	shared_str font_name;
 	CGameFont* font = nullptr;
 	u32 color = 0;
+	SUIOutlineParams text_shadow = {};
 };
 
 struct SWSUIBackground
@@ -236,6 +239,8 @@ struct SWSUIPromptConfig
 
 	float tutorial_x = 0.f;
 	float tutorial_y = 0.f;
+
+	SUIOutlineParams default_text_shadow = {};
 };
 
 struct SWSUIPromptParts
@@ -329,6 +334,8 @@ private:
 	u32 CountGroupedItemMarkers(const SInteractionMarker& focus_marker) const;
 	float PromptTextWidth(CGameFont* font, LPCSTR text, float kx) const;
 	float PromptTextHeight(CGameFont* font, float ky) const;
+	const SUIOutlineParams& ResolveTextShadow(const SUIOutlineParams& label_shadow) const;
+	void DrawPromptText(CGameFont* font, float x, float y, float kx, float ky, LPCSTR text, u32 color, CGameFont::EAligment align, const SUIOutlineParams& label_shadow) const;
 	u32 ColorWithAlpha(u32 color, float alpha) const;
 	float UiScale() const;
 	float AspectScaleX() const;
