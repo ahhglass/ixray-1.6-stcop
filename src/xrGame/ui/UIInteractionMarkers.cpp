@@ -204,6 +204,7 @@ void CInteractionMarkerManager::Load()
 	m_los_rr_cursor = 0;
 	m_los_rr_order_size = 0;
 	m_los_cam_valid = false;
+	m_scan_motion_valid = false;
 	m_bones_by_section.clear();
 	m_pos_adj_by_section.clear();
 	m_door_visuals_y.clear();
@@ -1654,6 +1655,39 @@ void CInteractionMarkerManager::OnMouseWheel(int direction)
 	m_wheel_focus_id = items[index].second;
 }
 
+bool CInteractionMarkerManager::IsScanEnvironmentMoving(CActor* actor) const
+{
+	if (!actor)
+		return true;
+
+	if (!m_scan_motion_valid)
+		return true;
+
+	const auto& scan = m_markers_cfg.scan;
+	const float actor_eps = scan.actor_pos_eps > 0.f ? scan.actor_pos_eps : WSUI_LOS_CAM_POS_EPS;
+	const float cam_eps = scan.camera_dir_eps > 0.f ? scan.camera_dir_eps : WSUI_LOS_CAM_DIR_EPS;
+
+	if (m_scan_actor_pos.distance_to_sqr(actor->Position()) > actor_eps * actor_eps)
+		return true;
+
+	if (1.f - m_scan_cam_dir.dotproduct(Device.vCameraDirection) > cam_eps)
+		return true;
+
+	return false;
+}
+
+u32 CInteractionMarkerManager::GetEffectiveScanIntervalMs(CActor* actor) const
+{
+	const auto& scan = m_markers_cfg.scan;
+	if (!scan.adaptive || !actor || IsScanEnvironmentMoving(actor))
+		return m_scan_interval_ms;
+
+	if (scan.idle_interval_ms > m_scan_interval_ms)
+		return scan.idle_interval_ms;
+
+	return m_scan_interval_ms;
+}
+
 void CInteractionMarkerManager::Update()
 {
 	if (!m_enabled || !g_actor || !g_actor->g_Alive())
@@ -1670,14 +1704,20 @@ void CInteractionMarkerManager::Update()
 		m_prompt_focus_id = 0xffff;
 		m_prompt_alpha = 0.f;
 		m_prompt_target_visible = false;
+		m_scan_motion_valid = false;
 		return;
 	}
 
 	const u32 now = Device.dwTimeGlobal;
-	if (!ShouldSuspendScan() && now - m_last_scan_time >= m_scan_interval_ms)
+	const bool environment_moving = IsScanEnvironmentMoving(g_actor);
+	const u32 scan_interval = GetEffectiveScanIntervalMs(g_actor);
+	if (!ShouldSuspendScan() && (environment_moving || now - m_last_scan_time >= scan_interval))
 	{
 		Scan(g_actor);
 		m_last_scan_time = now;
+		m_scan_actor_pos = g_actor->Position();
+		m_scan_cam_dir = Device.vCameraDirection;
+		m_scan_motion_valid = true;
 	}
 
 	if (!ShouldSuspendMarkLoop())
@@ -1789,10 +1829,24 @@ void CInteractionMarkerManager::LoadWsuiXml()
 
 void CInteractionMarkerManager::LoadWsuiMarkers(CUIXml& xml)
 {
+	LoadMarkersScan(xml);
 	LoadMarkersFeatures(xml);
 	LoadMarkersDistanceFade(xml);
 	LoadMarkersPriority(xml);
 	LoadMarkersPopinAnimation(xml);
+}
+
+void CInteractionMarkerManager::LoadMarkersScan(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_markers:scan";
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	auto& scan = m_markers_cfg.scan;
+	scan.adaptive = xml.ReadAttribInt(path, 0, "adaptive", 0) != 0;
+	scan.idle_interval_ms = xml.ReadAttribInt(path, 0, "idle_interval_ms", 0);
+	scan.actor_pos_eps = xml.ReadAttribFlt(path, 0, "actor_pos_eps", 0.f);
+	scan.camera_dir_eps = xml.ReadAttribFlt(path, 0, "camera_dir_eps", 0.f);
 }
 
 void CInteractionMarkerManager::LoadMarkersFeatures(CUIXml& xml)

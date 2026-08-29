@@ -149,6 +149,14 @@ struct SWSUIMarkersConfig
 		float npc = 0.f;
 	} marker_priority;
 
+	struct SScan
+	{
+		bool adaptive = false;
+		u32 idle_interval_ms = 0;
+		float actor_pos_eps = 0.f;
+		float camera_dir_eps = 0.f;
+	} scan;
+
 	u32 popin_duration_ms = 0;
 };
 
@@ -252,6 +260,7 @@ private:
 	void LoadMarkersDistanceFade(CUIXml& xml);
 	void LoadMarkersPriority(CUIXml& xml);
 	void LoadMarkersPopinAnimation(CUIXml& xml);
+	void LoadMarkersScan(CUIXml& xml);
 	void LoadPromptLayout(CUIXml& xml);
 	void LoadPromptFeatures(CUIXml& xml);
 	void LoadPromptFadeAnimation(CUIXml& xml);
@@ -317,6 +326,8 @@ private:
 	void RefreshMarkerClassifyCache(SInteractionMarker& marker, CGameObject* obj, EWSUIClass cls);
 	void RebuildLosRoundRobinOrder();
 	void MarkLosCachesStale();
+	bool IsScanEnvironmentMoving(CActor* actor) const;
+	u32 GetEffectiveScanIntervalMs(CActor* actor) const;
 
 private:
 	bool m_enabled = false;
@@ -334,6 +345,9 @@ private:
 	float m_lerp_speed = 0.15f;
 	u32 m_scan_interval_ms = 150;
 	u32 m_last_scan_time = 0;
+	Fvector m_scan_actor_pos = {};
+	Fvector m_scan_cam_dir = {};
+	bool m_scan_motion_valid = false;
 
 	static constexpr u32 WSUI_LOS_CACHE_TTL_MS = 150;
 	static constexpr u32 WSUI_LOS_CHECKS_PER_FRAME = 2;
