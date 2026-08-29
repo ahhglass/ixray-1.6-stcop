@@ -62,6 +62,7 @@ struct SWSUIItemCardMetric
 	float icon_h = 0.f;
 	float text_x = 0.f;
 	float text_y = 0.f;
+	float text_height = 0.f;
 	shared_str icon;
 	shared_str font_name;
 	CGameFont* font = nullptr;
@@ -132,6 +133,8 @@ struct SWSUIMarkersConfig
 		bool hide_dots = false;
 		bool wheel_cycle_pickups = false;
 		bool special_icons_always = false;
+		bool enable_task_icons = false;
+		bool enable_focus_sound = false;
 	} features;
 
 	struct SDistanceFade
@@ -145,19 +148,47 @@ struct SWSUIMarkersConfig
 
 	struct SMarkerPriority
 	{
+		float focus = 0.f;
 		float task = 0.f;
 		float npc = 0.f;
+		float stash = 0.f;
+		float usable = 0.f;
+		float door = 0.f;
+		float item = 0.f;
+		float body = 0.f;
 	} marker_priority;
 
 	struct SScan
 	{
+		float radius = 0.f;
+		u32 interval_ms = 0;
+		u32 max_markers = 0;
+		float prompt_distance = 0.f;
 		bool adaptive = false;
 		u32 idle_interval_ms = 0;
 		float actor_pos_eps = 0.f;
 		float camera_dir_eps = 0.f;
 	} scan;
 
-	u32 popin_duration_ms = 0;
+	struct SDot
+	{
+		float size = 0.f;
+		float lerp_speed = 0.f;
+	} dot;
+
+	struct SPopinAnimation
+	{
+		u32 duration_ms = 0;
+		float min_scale = 0.f;
+	} popin_animation;
+
+	struct SLosCache
+	{
+		u32 cache_ttl_ms = 0;
+		u32 checks_per_frame = 0;
+		float camera_pos_eps = 0.f;
+		float camera_dir_eps = 0.f;
+	} los_cache;
 };
 
 struct SWSUIPromptConfig
@@ -261,6 +292,10 @@ private:
 	void LoadMarkersPriority(CUIXml& xml);
 	void LoadMarkersPopinAnimation(CUIXml& xml);
 	void LoadMarkersScan(CUIXml& xml);
+	void LoadMarkersLosCache(CUIXml& xml);
+	void LoadMarkersDot(CUIXml& xml);
+	void LoadMarkersClasses(CUIXml& xml);
+	void LoadMarkersDikIcons(CUIXml& xml);
 	void LoadPromptLayout(CUIXml& xml);
 	void LoadPromptFeatures(CUIXml& xml);
 	void LoadPromptFadeAnimation(CUIXml& xml);
@@ -289,6 +324,7 @@ private:
 	float GetMarkerSortScore(u16 id, const SInteractionMarker& marker) const;
 	LPCSTR ResolveKeyBindIcon(int dik, float& out_w, float& out_h) const;
 	void LoadDikIcons();
+	void LoadDikIconsLtx();
 	u32 GetItemConditionColor(float condition) const;
 	u32 CountGroupedItemMarkers(const SInteractionMarker& focus_marker) const;
 	float PromptTextWidth(CGameFont* font, LPCSTR text, float kx) const;
@@ -334,25 +370,14 @@ private:
 	bool m_suppress_vanilla = true;
 	bool m_suppress_tutorial_ui = true;
 	bool m_hide_mute_stalkers = true;
-	bool m_enable_task_icons = true;
 	bool m_enable_quest_scheme_scan = true;
-	bool m_enable_focus_sound = false;
 	bool m_focus_sound_loaded = false;
-	float m_scan_radius = 5.f;
-	float m_prompt_distance = 4.f;
-	u32 m_max_markers = 10;
-	float m_dot_size = 6.f;
-	float m_lerp_speed = 0.15f;
-	u32 m_scan_interval_ms = 150;
+	bool m_classes_from_xml = false;
+	bool m_dik_icons_from_xml = false;
 	u32 m_last_scan_time = 0;
 	Fvector m_scan_actor_pos = {};
 	Fvector m_scan_cam_dir = {};
 	bool m_scan_motion_valid = false;
-
-	static constexpr u32 WSUI_LOS_CACHE_TTL_MS = 150;
-	static constexpr u32 WSUI_LOS_CHECKS_PER_FRAME = 2;
-	static constexpr float WSUI_LOS_CAM_POS_EPS = 0.05f;
-	static constexpr float WSUI_LOS_CAM_DIR_EPS = 0.001f;
 
 	u32 m_los_rr_cursor = 0;
 	u32 m_los_rr_order_size = 0;

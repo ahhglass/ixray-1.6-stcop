@@ -193,18 +193,14 @@ void CInteractionMarkerManager::Load()
 {
 	m_enabled = false;
 	m_suppress_vanilla = true;
-	m_scan_radius = 5.f;
-	m_prompt_distance = 4.f;
-	m_max_markers = 10;
-	m_dot_size = 12.f;
-	m_lerp_speed = 0.15f;
-	m_scan_interval_ms = 150;
 	m_markers.clear();
 	m_los_rr_order.clear();
 	m_los_rr_cursor = 0;
 	m_los_rr_order_size = 0;
 	m_los_cam_valid = false;
 	m_scan_motion_valid = false;
+	m_classes_from_xml = false;
+	m_dik_icons_from_xml = false;
 	m_bones_by_section.clear();
 	m_pos_adj_by_section.clear();
 	m_door_visuals_y.clear();
@@ -219,7 +215,6 @@ void CInteractionMarkerManager::Load()
 	m_focus_id = 0xffff;
 	HUD_SOUND_ITEM::DestroySound(m_focus_snd);
 	m_focus_sound_loaded = false;
-	m_enable_focus_sound = false;
 	m_markers_cfg = {};
 	m_prompt_cfg = {};
 	m_wheel_focus_id = 0xffff;
@@ -234,24 +229,18 @@ void CInteractionMarkerManager::Load()
 		return;
 
 	m_suppress_vanilla = READ_IF_EXISTS(pSettings, r_bool, "wsui", "suppress_vanilla", true);
-	m_scan_radius = READ_IF_EXISTS(pSettings, r_float, "wsui", "scan_radius", 5.f);
-	m_prompt_distance = READ_IF_EXISTS(pSettings, r_float, "wsui", "prompt_distance", 4.f);
-	m_max_markers = READ_IF_EXISTS(pSettings, r_u32, "wsui", "max_markers", 10);
-	m_dot_size = READ_IF_EXISTS(pSettings, r_float, "wsui", "dot_size", 12.f);
-	m_lerp_speed = READ_IF_EXISTS(pSettings, r_float, "wsui", "lerp_speed", 0.15f);
-	m_scan_interval_ms = READ_IF_EXISTS(pSettings, r_u32, "wsui", "scan_interval_ms", 150);
 	m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "ui_xml", nullptr);
 	if (!m_ui_xml.size())
 		m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "prompt_ui_xml", "ui_wsui.xml");
 	m_hide_mute_stalkers = READ_IF_EXISTS(pSettings, r_bool, "wsui", "hide_mute_stalkers", true);
-	m_enable_task_icons = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_task_icons", true);
 	m_suppress_tutorial_ui = READ_IF_EXISTS(pSettings, r_bool, "wsui", "suppress_tutorial_ui", true);
 	m_enable_quest_scheme_scan = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_quest_scheme_scan", true);
-	m_enable_focus_sound = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_focus_sound", false);
+	LoadWsuiXml();
 	LoadFocusSound();
-	LoadDikIcons();
-
-	LoadClassDefs();
+	if (!m_dik_icons_from_xml)
+		LoadDikIconsLtx();
+	if (!m_classes_from_xml)
+		LoadClassDefs();
 	LoadBonePriority();
 	LoadLookupSection("bones_by_section", false);
 	LoadLookupSection("pos_adj_by_section", true);
@@ -261,7 +250,6 @@ void CInteractionMarkerManager::Load()
 	LoadTextureLookupSection("zone_textures_by_name", m_zone_textures_by_name);
 	LoadTextureLookupSection("zone_prompts_by_name", m_zone_prompts_by_name);
 	LoadTextureLookupSection("tutorial_prompts_by_name", m_tutorial_prompts_by_name);
-	LoadWsuiXml();
 
 	if (m_enable_quest_scheme_scan)
 		BuildQuestSchemeIndex();
@@ -274,7 +262,7 @@ void CInteractionMarkerManager::Load()
 	}
 }
 
-void CInteractionMarkerManager::LoadDikIcons()
+void CInteractionMarkerManager::LoadDikIconsLtx()
 {
 	m_dik_icons.clear();
 	if (!pSettings->section_exist("wsui_dik_icons"))
@@ -293,6 +281,10 @@ void CInteractionMarkerManager::LoadDikIcons()
 
 void CInteractionMarkerManager::LoadClassDefs()
 {
+	if (m_classes_from_xml)
+		return;
+
+	const float default_distance = m_markers_cfg.scan.radius > 0.f ? m_markers_cfg.scan.radius : 5.f;
 	for (u32 i = 1; i < static_cast<u32>(EWSUIClass::Count); ++i)
 	{
 		const EWSUIClass cls = static_cast<EWSUIClass>(i);
@@ -303,7 +295,7 @@ void CInteractionMarkerManager::LoadClassDefs()
 		def.texture = nullptr;
 		def.active_texture = nullptr;
 		def.bone = nullptr;
-		def.show_distance = m_scan_radius;
+		def.show_distance = default_distance;
 
 		if (!section || !pSettings->section_exist(section))
 			continue;
@@ -312,7 +304,7 @@ void CInteractionMarkerManager::LoadClassDefs()
 		def.texture = READ_IF_EXISTS(pSettings, r_string, section, "texture", nullptr);
 		def.active_texture = READ_IF_EXISTS(pSettings, r_string, section, "active_texture", def.texture);
 		def.bone = READ_IF_EXISTS(pSettings, r_string, section, "bone", nullptr);
-		def.show_distance = READ_IF_EXISTS(pSettings, r_float, section, "show_distance", m_scan_radius);
+		def.show_distance = READ_IF_EXISTS(pSettings, r_float, section, "show_distance", default_distance);
 	}
 }
 
@@ -587,7 +579,7 @@ bool CInteractionMarkerManager::IsTaskTarget(u16 object_id, bool& is_storyline) 
 {
 	is_storyline = false;
 
-	if (!m_enable_task_icons || !Level().GameTaskManager())
+	if (!m_markers_cfg.features.enable_task_icons || !Level().GameTaskManager())
 		return false;
 
 	CGameTaskManager* tm = Level().GameTaskManager();
@@ -805,7 +797,7 @@ shared_str CInteractionMarkerManager::ResolveActiveTexture(CGameObject* obj, EWS
 
 	const u16 object_id = obj->ID();
 
-	if (m_enable_task_icons)
+	if (m_markers_cfg.features.enable_task_icons)
 	{
 		bool is_storyline = false;
 		if (IsTaskTarget(object_id, is_storyline))
@@ -1095,7 +1087,7 @@ void CInteractionMarkerManager::Scan(CActor* actor)
 		u64(ESPATIAL_TYPE::SPACE_RESTRICTOR) |
 		u64(ESPATIAL_TYPE::CAMP_ZONE);
 
-	g_SpatialSpace->q_sphere(spatial_results, 0, ESPATIAL_TYPE(spatial_mask), origin, m_scan_radius);
+	g_SpatialSpace->q_sphere(spatial_results, 0, ESPATIAL_TYPE(spatial_mask), origin, m_markers_cfg.scan.radius);
 
 	for (const ISpatialShared& spatial : spatial_results)
 	{
@@ -1192,6 +1184,10 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 	const Fvector& cam_pos = Device.vCameraPosition;
 	const Fvector& cam_dir = Device.vCameraDirection;
 
+	const auto& los = m_markers_cfg.los_cache;
+	const float los_pos_eps = los.camera_pos_eps > 0.f ? los.camera_pos_eps : 0.05f;
+	const float los_dir_eps = los.camera_dir_eps > 0.f ? los.camera_dir_eps : 0.001f;
+
 	bool invalidate_los = false;
 	if (!m_los_cam_valid)
 	{
@@ -1200,9 +1196,9 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 	}
 	else
 	{
-		if (m_los_cam_pos.distance_to_sqr(cam_pos) > WSUI_LOS_CAM_POS_EPS * WSUI_LOS_CAM_POS_EPS)
+		if (m_los_cam_pos.distance_to_sqr(cam_pos) > los_pos_eps * los_pos_eps)
 			invalidate_los = true;
-		else if (1.f - m_los_cam_dir.dotproduct(cam_dir) > WSUI_LOS_CAM_DIR_EPS)
+		else if (1.f - m_los_cam_dir.dotproduct(cam_dir) > los_dir_eps)
 			invalidate_los = true;
 	}
 
@@ -1217,7 +1213,7 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 	if (!m_los_rr_order.empty())
 	{
 		const u32 order_size = m_los_rr_order.size();
-		const u32 checks = std::min(WSUI_LOS_CHECKS_PER_FRAME, order_size);
+		const u32 checks = std::min(los.checks_per_frame > 0 ? los.checks_per_frame : 2u, order_size);
 		for (u32 i = 0; i < checks; ++i)
 		{
 			const u32 idx = (m_los_rr_cursor + i) % order_size;
@@ -1226,7 +1222,7 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 		m_los_rr_cursor = (m_los_rr_cursor + checks) % order_size;
 	}
 
-	const float lerp_factor = clampr(m_lerp_speed * Device.fTimeDelta * 60.f, 0.f, 1.f);
+	const float lerp_factor = clampr(m_markers_cfg.dot.lerp_speed * Device.fTimeDelta * 60.f, 0.f, 1.f);
 
 	for (auto& [id, marker] : m_markers)
 	{
@@ -1296,7 +1292,8 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 		}
 		else
 		{
-			const bool stale = !marker.los_has_result || marker.los_stale || (now - marker.los_check_time >= WSUI_LOS_CACHE_TTL_MS);
+			const u32 los_ttl = los.cache_ttl_ms > 0 ? los.cache_ttl_ms : 150u;
+			const bool stale = !marker.los_has_result || marker.los_stale || (now - marker.los_check_time >= los_ttl);
 			if (stale && los_check_ids.find(id) != los_check_ids.end())
 			{
 				marker.los_reachable = HasLineOfSight(actor, game_object, world_pos);
@@ -1332,7 +1329,7 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 
 void CInteractionMarkerManager::ApplyMarkerLimit(CActor* actor)
 {
-	if (!actor || m_max_markers == 0)
+	if (!actor || m_markers_cfg.scan.max_markers == 0)
 		return;
 
 	xr_vector<std::pair<float, u16>> ranked;
@@ -1345,7 +1342,7 @@ void CInteractionMarkerManager::ApplyMarkerLimit(CActor* actor)
 		ranked.emplace_back(GetMarkerSortScore(id, marker), id);
 	}
 
-	if (ranked.size() <= m_max_markers)
+	if (ranked.size() <= m_markers_cfg.scan.max_markers)
 		return;
 
 	std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b)
@@ -1356,7 +1353,7 @@ void CInteractionMarkerManager::ApplyMarkerLimit(CActor* actor)
 	});
 
 	xr_set<u16> keep_ids;
-	for (u32 i = 0; i < m_max_markers; ++i)
+	for (u32 i = 0; i < m_markers_cfg.scan.max_markers; ++i)
 		keep_ids.insert(ranked[i].second);
 
 	if (m_focus_id != 0xffff)
@@ -1376,7 +1373,7 @@ float CInteractionMarkerManager::GetMarkerSortScore(u16 id, const SInteractionMa
 {
 	float score = 1000000.f - marker.distance;
 
-	if (m_enable_task_icons)
+	if (m_markers_cfg.features.enable_task_icons)
 	{
 		bool is_storyline = false;
 		if (IsTaskTarget(id, is_storyline))
@@ -1384,14 +1381,16 @@ float CInteractionMarkerManager::GetMarkerSortScore(u16 id, const SInteractionMa
 	}
 
 	if (id == m_focus_id)
-		score += 5000.f;
+		score += m_markers_cfg.marker_priority.focus;
 
 	switch (marker.cls)
 	{
 	case EWSUIClass::Npc: score += m_markers_cfg.marker_priority.npc; break;
-	case EWSUIClass::Stash: score += 2000.f; break;
-	case EWSUIClass::Usable: score += 1500.f; break;
-	case EWSUIClass::Door: score += 1000.f; break;
+	case EWSUIClass::Stash: score += m_markers_cfg.marker_priority.stash; break;
+	case EWSUIClass::Usable: score += m_markers_cfg.marker_priority.usable; break;
+	case EWSUIClass::Door: score += m_markers_cfg.marker_priority.door; break;
+	case EWSUIClass::Item: score += m_markers_cfg.marker_priority.item; break;
+	case EWSUIClass::Body: score += m_markers_cfg.marker_priority.body; break;
 	default: break;
 	}
 
@@ -1664,8 +1663,8 @@ bool CInteractionMarkerManager::IsScanEnvironmentMoving(CActor* actor) const
 		return true;
 
 	const auto& scan = m_markers_cfg.scan;
-	const float actor_eps = scan.actor_pos_eps > 0.f ? scan.actor_pos_eps : WSUI_LOS_CAM_POS_EPS;
-	const float cam_eps = scan.camera_dir_eps > 0.f ? scan.camera_dir_eps : WSUI_LOS_CAM_DIR_EPS;
+	const float actor_eps = scan.actor_pos_eps > 0.f ? scan.actor_pos_eps : m_markers_cfg.los_cache.camera_pos_eps;
+	const float cam_eps = scan.camera_dir_eps > 0.f ? scan.camera_dir_eps : m_markers_cfg.los_cache.camera_dir_eps;
 
 	if (m_scan_actor_pos.distance_to_sqr(actor->Position()) > actor_eps * actor_eps)
 		return true;
@@ -1680,12 +1679,12 @@ u32 CInteractionMarkerManager::GetEffectiveScanIntervalMs(CActor* actor) const
 {
 	const auto& scan = m_markers_cfg.scan;
 	if (!scan.adaptive || !actor || IsScanEnvironmentMoving(actor))
-		return m_scan_interval_ms;
+		return m_markers_cfg.scan.interval_ms > 0 ? m_markers_cfg.scan.interval_ms : 150u;
 
-	if (scan.idle_interval_ms > m_scan_interval_ms)
+	if (scan.idle_interval_ms > m_markers_cfg.scan.interval_ms)
 		return scan.idle_interval_ms;
 
-	return m_scan_interval_ms;
+	return m_markers_cfg.scan.interval_ms > 0 ? m_markers_cfg.scan.interval_ms : 150u;
 }
 
 void CInteractionMarkerManager::Update()
@@ -1743,7 +1742,7 @@ bool CInteractionMarkerManager::WantsPromptVisible(CActor* actor) const
 		return false;
 
 	const SInteractionMarker& marker = it->second;
-	if (!marker.visible || !marker.reachable || marker.distance > m_prompt_distance)
+	if (!marker.visible || !marker.reachable || marker.distance > m_markers_cfg.scan.prompt_distance)
 		return false;
 
 	if (m_suppress_tutorial_ui && (marker.cls == EWSUIClass::Zone || marker.cls == EWSUIClass::Campfire))
@@ -1799,15 +1798,15 @@ void CInteractionMarkerManager::UpdatePromptFade(CActor* actor)
 
 float CInteractionMarkerManager::GetFocusPopinScale() const
 {
-	if (!m_markers_cfg.popin_duration_ms || m_focus_id == 0xffff || m_popin_focus_id != m_focus_id)
+	if (!m_markers_cfg.popin_animation.duration_ms || m_focus_id == 0xffff || m_popin_focus_id != m_focus_id)
 		return 1.f;
 
 	const float elapsed = float(Device.dwTimeGlobal - m_popin_start_time);
-	const float t = elapsed / float(m_markers_cfg.popin_duration_ms);
+	const float t = elapsed / float(m_markers_cfg.popin_animation.duration_ms);
 	if (t >= 1.f)
 		return 1.f;
 
-	const float min_scale = 0.55f;
+	const float min_scale = m_markers_cfg.popin_animation.min_scale > 0.f ? m_markers_cfg.popin_animation.min_scale : 0.55f;
 	return min_scale + (1.f - min_scale) * EaseOutElastic(t);
 }
 
@@ -1830,10 +1829,14 @@ void CInteractionMarkerManager::LoadWsuiXml()
 void CInteractionMarkerManager::LoadWsuiMarkers(CUIXml& xml)
 {
 	LoadMarkersScan(xml);
+	LoadMarkersDot(xml);
+	LoadMarkersLosCache(xml);
 	LoadMarkersFeatures(xml);
 	LoadMarkersDistanceFade(xml);
 	LoadMarkersPriority(xml);
 	LoadMarkersPopinAnimation(xml);
+	LoadMarkersClasses(xml);
+	LoadMarkersDikIcons(xml);
 }
 
 void CInteractionMarkerManager::LoadMarkersScan(CUIXml& xml)
@@ -1843,10 +1846,37 @@ void CInteractionMarkerManager::LoadMarkersScan(CUIXml& xml)
 		return;
 
 	auto& scan = m_markers_cfg.scan;
+	scan.radius = xml.ReadAttribFlt(path, 0, "radius", 0.f);
+	scan.interval_ms = xml.ReadAttribInt(path, 0, "interval_ms", 0);
+	scan.max_markers = xml.ReadAttribInt(path, 0, "max_markers", 0);
+	scan.prompt_distance = xml.ReadAttribFlt(path, 0, "prompt_distance", 0.f);
 	scan.adaptive = xml.ReadAttribInt(path, 0, "adaptive", 0) != 0;
 	scan.idle_interval_ms = xml.ReadAttribInt(path, 0, "idle_interval_ms", 0);
 	scan.actor_pos_eps = xml.ReadAttribFlt(path, 0, "actor_pos_eps", 0.f);
 	scan.camera_dir_eps = xml.ReadAttribFlt(path, 0, "camera_dir_eps", 0.f);
+}
+
+void CInteractionMarkerManager::LoadMarkersDot(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_markers:dot";
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	m_markers_cfg.dot.size = xml.ReadAttribFlt(path, 0, "size", 0.f);
+	m_markers_cfg.dot.lerp_speed = xml.ReadAttribFlt(path, 0, "lerp_speed", 0.f);
+}
+
+void CInteractionMarkerManager::LoadMarkersLosCache(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_markers:los_cache";
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	auto& los = m_markers_cfg.los_cache;
+	los.cache_ttl_ms = xml.ReadAttribInt(path, 0, "cache_ttl_ms", 0);
+	los.checks_per_frame = xml.ReadAttribInt(path, 0, "checks_per_frame", 0);
+	los.camera_pos_eps = xml.ReadAttribFlt(path, 0, "camera_pos_eps", 0.f);
+	los.camera_dir_eps = xml.ReadAttribFlt(path, 0, "camera_dir_eps", 0.f);
 }
 
 void CInteractionMarkerManager::LoadMarkersFeatures(CUIXml& xml)
@@ -1855,9 +1885,12 @@ void CInteractionMarkerManager::LoadMarkersFeatures(CUIXml& xml)
 	if (!xml.NavigateToNode(path, 0))
 		return;
 
-	m_markers_cfg.features.hide_dots = xml.ReadAttribInt(path, 0, "hide_dots", 0) != 0;
-	m_markers_cfg.features.wheel_cycle_pickups = xml.ReadAttribInt(path, 0, "wheel_cycle_pickups", 0) != 0;
-	m_markers_cfg.features.special_icons_always = xml.ReadAttribInt(path, 0, "special_icons_always", 0) != 0;
+	auto& f = m_markers_cfg.features;
+	f.hide_dots = xml.ReadAttribInt(path, 0, "hide_dots", 0) != 0;
+	f.wheel_cycle_pickups = xml.ReadAttribInt(path, 0, "wheel_cycle_pickups", 0) != 0;
+	f.special_icons_always = xml.ReadAttribInt(path, 0, "special_icons_always", 0) != 0;
+	f.enable_task_icons = xml.ReadAttribInt(path, 0, "enable_task_icons", 0) != 0;
+	f.enable_focus_sound = xml.ReadAttribInt(path, 0, "enable_focus_sound", 0) != 0;
 }
 
 void CInteractionMarkerManager::LoadMarkersDistanceFade(CUIXml& xml)
@@ -1880,8 +1913,15 @@ void CInteractionMarkerManager::LoadMarkersPriority(CUIXml& xml)
 	if (!xml.NavigateToNode(path, 0))
 		return;
 
-	m_markers_cfg.marker_priority.task = xml.ReadAttribFlt(path, 0, "task", 0.f);
-	m_markers_cfg.marker_priority.npc = xml.ReadAttribFlt(path, 0, "npc", 0.f);
+	auto& p = m_markers_cfg.marker_priority;
+	p.focus = xml.ReadAttribFlt(path, 0, "focus", 0.f);
+	p.task = xml.ReadAttribFlt(path, 0, "task", 0.f);
+	p.npc = xml.ReadAttribFlt(path, 0, "npc", 0.f);
+	p.stash = xml.ReadAttribFlt(path, 0, "stash", 0.f);
+	p.usable = xml.ReadAttribFlt(path, 0, "usable", 0.f);
+	p.door = xml.ReadAttribFlt(path, 0, "door", 0.f);
+	p.item = xml.ReadAttribFlt(path, 0, "item", 0.f);
+	p.body = xml.ReadAttribFlt(path, 0, "body", 0.f);
 }
 
 void CInteractionMarkerManager::LoadMarkersPopinAnimation(CUIXml& xml)
@@ -1890,7 +1930,66 @@ void CInteractionMarkerManager::LoadMarkersPopinAnimation(CUIXml& xml)
 	if (!xml.NavigateToNode(path, 0))
 		return;
 
-	m_markers_cfg.popin_duration_ms = xml.ReadAttribInt(path, 0, "duration_ms", 0);
+	auto& popin = m_markers_cfg.popin_animation;
+	popin.duration_ms = xml.ReadAttribInt(path, 0, "duration_ms", 0);
+	popin.min_scale = xml.ReadAttribFlt(path, 0, "min_scale", 0.f);
+}
+
+void CInteractionMarkerManager::LoadMarkersClasses(CUIXml& xml)
+{
+	if (!xml.NavigateToNode("wsui_markers:classes", 0))
+		return;
+
+	m_classes_from_xml = true;
+	const float default_distance = m_markers_cfg.scan.radius > 0.f ? m_markers_cfg.scan.radius : 5.f;
+
+	for (u32 i = 1; i < static_cast<u32>(EWSUIClass::Count); ++i)
+	{
+		const EWSUIClass cls = static_cast<EWSUIClass>(i);
+		LPCSTR class_name = ClassName(cls);
+		if (!class_name)
+			continue;
+
+		string256 node_path;
+		xr_sprintf(node_path, "wsui_markers:classes:%s", class_name);
+		if (!xml.NavigateToNode(node_path, 0))
+			continue;
+
+		SWSUIClassDef& def = m_classes[i];
+		def.enabled = xml.ReadAttribInt(node_path, 0, "enabled", 1) != 0;
+		if (LPCSTR tex = xml.ReadAttrib(node_path, 0, "texture", nullptr))
+			def.texture = tex;
+		if (LPCSTR tex = xml.ReadAttrib(node_path, 0, "active_texture", nullptr))
+			def.active_texture = tex;
+		if (LPCSTR bone = xml.ReadAttrib(node_path, 0, "bone", nullptr))
+			def.bone = bone;
+		def.show_distance = xml.ReadAttribFlt(node_path, 0, "show_distance", default_distance);
+	}
+}
+
+void CInteractionMarkerManager::LoadMarkersDikIcons(CUIXml& xml)
+{
+	if (!xml.NavigateToNode("wsui_markers:dik_icons", 0))
+		return;
+
+	static const LPCSTR keys[] = { "mouse1", "mouse2", "mouse3", "mouse4", "mouse5" };
+	m_dik_icons.clear();
+	m_dik_icons_from_xml = true;
+
+	for (LPCSTR key : keys)
+	{
+		string256 node_path;
+		xr_sprintf(node_path, "wsui_markers:dik_icons:%s", key);
+		if (!xml.NavigateToNode(node_path, 0))
+			continue;
+
+		if (LPCSTR tex = xml.ReadAttrib(node_path, 0, "texture", nullptr))
+		{
+			const int dik = keyname_to_dik(key);
+			if (dik > 0)
+				m_dik_icons[dik] = tex;
+		}
+	}
 }
 
 void CInteractionMarkerManager::LoadWsuiPrompt(CUIXml& xml)
@@ -1989,8 +2088,7 @@ void CInteractionMarkerManager::LoadBackground(CUIXml& xml, LPCSTR path, SWSUIBa
 	const int g = xml.ReadAttribInt(path, 0, "g", 255);
 	const int b = xml.ReadAttribInt(path, 0, "b", 255);
 	const int a = xml.ReadAttribInt(path, 0, "a", 255);
-	if (r != 255 || g != 255 || b != 255 || a != 255)
-		out.color = color_rgba(r, g, b, a);
+	out.color = color_rgba(r, g, b, a);
 }
 
 void CInteractionMarkerManager::LoadPromptMainPanel(CUIXml& xml)
@@ -2093,6 +2191,7 @@ void CInteractionMarkerManager::LoadItemCardMetric(CUIXml& xml, LPCSTR path, SWS
 	out.icon_h = xml.ReadAttribFlt(path, 0, "icon_h", out.icon_h);
 	out.text_x = xml.ReadAttribFlt(path, 0, "text_x", out.text_x);
 	out.text_y = xml.ReadAttribFlt(path, 0, "text_y", out.text_y);
+	out.text_height = xml.ReadAttribFlt(path, 0, "text_height", out.text_height);
 	if (LPCSTR tex = xml.ReadAttrib(path, 0, "icon", nullptr))
 		out.icon = tex;
 
@@ -2115,7 +2214,7 @@ void CInteractionMarkerManager::LoadFocusSound()
 	HUD_SOUND_ITEM::DestroySound(m_focus_snd);
 	m_focus_sound_loaded = false;
 
-	if (!m_enable_focus_sound)
+	if (!m_markers_cfg.features.enable_focus_sound)
 		return;
 
 	if (!pSettings->section_exist("wsui_sounds"))
@@ -2138,7 +2237,7 @@ void CInteractionMarkerManager::PlayFocusSound() const
 
 void CInteractionMarkerManager::UpdateFocusSound(CActor* actor)
 {
-	if (!m_enable_focus_sound || !m_focus_sound_loaded || !actor || ShouldHideUI())
+	if (!m_markers_cfg.features.enable_focus_sound || !m_focus_sound_loaded || !actor || ShouldHideUI())
 		return;
 
 	if (m_focus_id == 0xffff || m_focus_id == m_prev_focus_id)
@@ -2148,7 +2247,7 @@ void CInteractionMarkerManager::UpdateFocusSound(CActor* actor)
 	if (it == m_markers.end() || !it->second.visible || !it->second.reachable)
 		return;
 
-	if (it->second.distance > m_prompt_distance)
+	if (it->second.distance > m_markers_cfg.scan.prompt_distance)
 		return;
 
 	string512 action_text;
@@ -2165,7 +2264,7 @@ void CInteractionMarkerManager::UpdateAnimations(CActor* actor)
 
 	if (m_focus_id != m_prev_focus_id)
 	{
-		if (m_focus_id != 0xffff && m_markers_cfg.popin_duration_ms > 0)
+		if (m_focus_id != 0xffff && m_markers_cfg.popin_animation.duration_ms > 0)
 		{
 			m_popin_focus_id = m_focus_id;
 			m_popin_start_time = Device.dwTimeGlobal;
@@ -2560,7 +2659,7 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 	const float panel_left = drop_cx - drop_w * 0.5f;
 	const float panel_top = drop_cy - drop_h * 0.5f;
 
-	DrawTextureMarker(bg.texture, drop_cx, drop_cy, drop_w, drop_h, ColorWithAlpha(0xCCFFFFFF, alpha), false);
+	DrawTextureMarker(bg.texture, drop_cx, drop_cy, drop_w, drop_h, ColorWithAlpha(bg.color, alpha), false);
 
 	float cursor_x = drop_cx - drop_w * 0.5f + m_prompt_cfg.text_pad * scale;
 
@@ -2655,7 +2754,7 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 				const float drop_h_cond = (cond_cfg.background.height > 0.f ? cond_cfg.background.height : text_h_ui + pad * 2.f) * scale;
 				const float cond_drop_cx = cond_ui_x + cond_drop_w * 0.5f;
 				const float cond_drop_cy = cond_ui_y + drop_h_cond * 0.5f;
-				const u32 drop_color = cond_cfg.background.color ? cond_cfg.background.color : 0xCCFFFFFF;
+				const u32 drop_color = cond_cfg.background.color;
 				DrawTextureMarker(cond_cfg.background.texture, cond_drop_cx, cond_drop_cy, cond_drop_w, drop_h_cond, ColorWithAlpha(drop_color, alpha), false);
 			}
 
@@ -2711,17 +2810,32 @@ void CInteractionMarkerManager::RenderItemCard(float panel_left, float panel_bot
 	if (has_value)
 		xr_sprintf(cost_str, sizeof(cost_str), "%u", item->Cost());
 
+	auto metric_text_height = [&](const SWSUIItemCardMetric& metric, CGameFont* font) -> float
+	{
+		if (metric.text_height > 0.f)
+			return metric.text_height;
+		if (font)
+			return font->CurrentHeight_() * m_prompt_cfg.font_scale_h / ky;
+		return 12.f;
+	};
+
+	auto metric_bottom = [&](const SWSUIItemCardMetric& metric, LPCSTR text, CGameFont* font) -> float
+	{
+		const float text_h = metric_text_height(metric, font);
+		return metric.y + std::max(metric.icon_y + metric.icon_h, metric.text_y + text_h);
+	};
+
 	float content_right = 0.f;
 	float content_bottom = 0.f;
 	if (has_weight)
 	{
 		content_right = std::max(content_right, metric_right(card.weight, weight_str, card.weight.font));
-		content_bottom = std::max(content_bottom, card.weight.y + std::max(card.weight.icon_y + card.weight.icon_h, card.weight.text_y + 12.f));
+		content_bottom = std::max(content_bottom, metric_bottom(card.weight, weight_str, card.weight.font));
 	}
 	if (has_value)
 	{
 		content_right = std::max(content_right, metric_right(card.value, cost_str, card.value.font));
-		content_bottom = std::max(content_bottom, card.value.y + std::max(card.value.icon_y + card.value.icon_h, card.value.text_y + 12.f));
+		content_bottom = std::max(content_bottom, metric_bottom(card.value, cost_str, card.value.font));
 	}
 
 	const float drop_h = (card.background.height > 0.f ? card.background.height : content_bottom + 2.f) * scale;
@@ -2730,7 +2844,7 @@ void CInteractionMarkerManager::RenderItemCard(float panel_left, float panel_bot
 	const float drop_cy = origin_y + drop_h * 0.5f;
 
 	if (card.background.texture.size())
-		DrawTextureMarker(card.background.texture, drop_cx, drop_cy, drop_w, drop_h, ColorWithAlpha(0xCCFFFFFF, alpha), false);
+		DrawTextureMarker(card.background.texture, drop_cx, drop_cy, drop_w, drop_h, ColorWithAlpha(card.background.color, alpha), false);
 
 	auto draw_metric = [&](const SWSUIItemCardMetric& metric, LPCSTR text)
 	{
@@ -2771,7 +2885,7 @@ void CInteractionMarkerManager::RenderPrompt(CActor* actor) const
 	if (it == m_markers.end() || !it->second.visible || !it->second.reachable)
 		return;
 
-	if (it->second.distance > m_prompt_distance)
+	if (it->second.distance > m_markers_cfg.scan.prompt_distance)
 		return;
 
 	SWSUIPromptParts parts;
@@ -2790,7 +2904,7 @@ void CInteractionMarkerManager::RenderPrompt(CActor* actor) const
 
 	const float marker_x = it->second.screen_pos.x + m_prompt_cfg.anchor_x * scale;
 	const float marker_y = it->second.screen_pos.y + m_prompt_cfg.anchor_y * scale;
-	const float dot_h = SquareHeight(m_dot_size * scale);
+	const float dot_h = SquareHeight(m_markers_cfg.dot.size * scale);
 	const float anchor_y = marker_y + dot_h * 0.5f + m_prompt_cfg.text_pad * scale;
 
 	RenderPromptBubble(marker_x, anchor_y, parts, key_name, alpha, false, &it->second);
@@ -2849,7 +2963,7 @@ void CInteractionMarkerManager::OnRender()
 			const bool focused = id == m_focus_id;
 			const float popin_scale = focused ? GetFocusPopinScale() : 1.f;
 			const float dist_scale = GetDotDistanceScale(marker.distance, def.show_distance);
-			const float dot_w = m_dot_size * UiScale() * popin_scale * dist_scale;
+			const float dot_w = m_markers_cfg.dot.size * UiScale() * popin_scale * dist_scale;
 			const float dot_h = SquareHeight(dot_w);
 			CGameObject* marker_obj = nullptr;
 			if (CObject* object = Level().Objects.net_Find(id))
