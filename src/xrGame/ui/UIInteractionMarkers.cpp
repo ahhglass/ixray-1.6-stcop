@@ -154,14 +154,85 @@ namespace
 	}
 }
 
+bool CInteractionMarkerManager::IsRuntimeEnabled() const
+{
+	if (!m_config_loaded)
+		return false;
+	if (m_script_enabled_override >= 0)
+		return m_script_enabled_override != 0;
+	return m_enabled;
+}
+
 bool CInteractionMarkerManager::IsEnabled()
 {
-	return g_pInteractionMarkerManager && g_pInteractionMarkerManager->m_enabled;
+	return g_pInteractionMarkerManager && g_pInteractionMarkerManager->IsRuntimeEnabled();
+}
+
+void CInteractionMarkerManager::ClearMarkerState()
+{
+	m_markers.clear();
+	m_los_rr_order.clear();
+	m_los_rr_cursor = 0;
+	m_los_rr_order_size = 0;
+	m_focus_id = 0xffff;
+	m_engine_focus_id = 0xffff;
+	m_wheel_focus_id = 0xffff;
+	m_prev_focus_id = 0xffff;
+	m_popin_focus_id = 0xffff;
+	m_prompt_focus_id = 0xffff;
+	m_prompt_alpha = 0.f;
+	m_tutorial_prompt_alpha = 0.f;
+}
+
+void CInteractionMarkerManager::SetScriptEnabled(bool enabled)
+{
+	const s8 override_val = enabled ? s8(1) : s8(0);
+	if (m_script_enabled_override == override_val)
+		return;
+
+	m_script_enabled_override = override_val;
+	if (!enabled)
+		ClearMarkerState();
+}
+
+bool CInteractionMarkerManager::GetScriptBool(LPCSTR key) const
+{
+	if (!key || !key[0])
+		return false;
+
+	if (!xr_strcmp(key, "suppress_vanilla")) return m_suppress_vanilla;
+	if (!xr_strcmp(key, "hide_dots")) return m_markers_cfg.features.hide_dots;
+	if (!xr_strcmp(key, "wheel_cycle_pickups")) return m_markers_cfg.features.wheel_cycle_pickups;
+	if (!xr_strcmp(key, "enable_task_icons")) return m_markers_cfg.features.enable_task_icons;
+	if (!xr_strcmp(key, "enable_focus_sound")) return m_markers_cfg.features.enable_focus_sound;
+	if (!xr_strcmp(key, "item_stack_count")) return m_prompt_cfg.features.item_stack_count;
+	if (!xr_strcmp(key, "item_condition")) return m_prompt_cfg.features.item_condition;
+	if (!xr_strcmp(key, "item_card")) return m_prompt_cfg.features.item_card;
+	if (!xr_strcmp(key, "keybind")) return m_prompt_cfg.features.keybind;
+
+	return false;
+}
+
+void CInteractionMarkerManager::SetScriptBool(LPCSTR key, bool value)
+{
+	if (!key || !key[0] || !m_config_loaded)
+		return;
+
+	if (!xr_strcmp(key, "suppress_vanilla")) m_suppress_vanilla = value;
+	else if (!xr_strcmp(key, "hide_dots")) m_markers_cfg.features.hide_dots = value;
+	else if (!xr_strcmp(key, "wheel_cycle_pickups")) m_markers_cfg.features.wheel_cycle_pickups = value;
+	else if (!xr_strcmp(key, "enable_task_icons")) m_markers_cfg.features.enable_task_icons = value;
+	else if (!xr_strcmp(key, "enable_focus_sound")) m_markers_cfg.features.enable_focus_sound = value;
+	else if (!xr_strcmp(key, "item_stack_count")) m_prompt_cfg.features.item_stack_count = value;
+	else if (!xr_strcmp(key, "item_condition")) m_prompt_cfg.features.item_condition = value;
+	else if (!xr_strcmp(key, "item_card")) m_prompt_cfg.features.item_card = value;
+	else if (!xr_strcmp(key, "keybind")) m_prompt_cfg.features.keybind = value;
 }
 
 bool CInteractionMarkerManager::ShouldSuppressVanilla()
 {
-	return IsEnabled() && g_pInteractionMarkerManager->m_suppress_vanilla;
+	// WSUI on → hide legacy pickup/help UI; WSUI off → vanilla returns.
+	return IsEnabled();
 }
 
 bool CInteractionMarkerManager::ShouldSuppressTutorialUi()
@@ -220,13 +291,13 @@ void CInteractionMarkerManager::Load()
 	m_wheel_focus_id = 0xffff;
 	m_engine_focus_id = 0xffff;
 	m_dik_icons.clear();
+	m_config_loaded = false;
+	m_script_enabled_override = -1;
 
 	if (!pSettings->section_exist("wsui"))
 		return;
 
 	m_enabled = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enabled", false);
-	if (!m_enabled)
-		return;
 
 	m_suppress_vanilla = READ_IF_EXISTS(pSettings, r_bool, "wsui", "suppress_vanilla", true);
 	m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "ui_xml", nullptr);
@@ -260,6 +331,8 @@ void CInteractionMarkerManager::Load()
 		for (const auto& line : sect.Data)
 			m_breakable_box_visuals.insert(line.first);
 	}
+
+	m_config_loaded = true;
 }
 
 void CInteractionMarkerManager::LoadDikIconsLtx()
@@ -1604,7 +1677,7 @@ float CInteractionMarkerManager::GetDotDistanceAlpha(float distance, float show_
 
 void CInteractionMarkerManager::OnMouseWheel(int direction)
 {
-	if (!m_enabled || !m_markers_cfg.features.wheel_cycle_pickups || !g_actor || !g_actor->g_Alive())
+	if (!IsRuntimeEnabled() || !m_markers_cfg.features.wheel_cycle_pickups || !g_actor || !g_actor->g_Alive())
 		return;
 
 	if (ShouldHideUI() || ShouldSuspendMarkLoop())
@@ -1689,7 +1762,7 @@ u32 CInteractionMarkerManager::GetEffectiveScanIntervalMs(CActor* actor) const
 
 void CInteractionMarkerManager::Update()
 {
-	if (!m_enabled || !g_actor || !g_actor->g_Alive())
+	if (!IsRuntimeEnabled() || !g_actor || !g_actor->g_Alive())
 		return;
 
 	if (ShouldHideUI())
@@ -2975,7 +3048,7 @@ void CInteractionMarkerManager::RenderTutorialPrompt() const
 
 void CInteractionMarkerManager::OnRender()
 {
-	if (!m_enabled || !g_bRendering || !g_actor || !g_actor->g_Alive())
+	if (!IsRuntimeEnabled() || !g_bRendering || !g_actor || !g_actor->g_Alive())
 		return;
 
 	if (ShouldHideUI() || ShouldSuspendMarkLoop())

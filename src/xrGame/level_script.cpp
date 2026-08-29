@@ -49,6 +49,7 @@
 #include "ActorHelmet.h"
 #include "DynamicWallmarkZone.h"
 #include "InventoryVolumeSystem.h"
+#include "ui/UIInteractionMarkers.h"
 #include "PickupManager.h"
 #include "UIActorMenu.h"
 #include "../xrServerEntities/restriction_space.h"
@@ -833,6 +834,31 @@ void set_inventory_volume_enabled(bool enabled)
 {
 	CInventoryVolumeSystem::Get().SetScriptEnabled(enabled);
 }
+
+bool is_wsui_enabled()
+{
+	return CInteractionMarkerManager::IsEnabled();
+}
+
+void set_wsui_enabled(bool enabled)
+{
+	if (g_pInteractionMarkerManager && g_pInteractionMarkerManager->IsConfigLoaded())
+		g_pInteractionMarkerManager->SetScriptEnabled(enabled);
+}
+
+bool get_wsui_bool(LPCSTR key)
+{
+	if (!g_pInteractionMarkerManager || !g_pInteractionMarkerManager->IsConfigLoaded())
+		return false;
+	return g_pInteractionMarkerManager->GetScriptBool(key);
+}
+
+void set_wsui_bool(LPCSTR key, bool value)
+{
+	if (g_pInteractionMarkerManager && g_pInteractionMarkerManager->IsConfigLoaded())
+		g_pInteractionMarkerManager->SetScriptBool(key, value);
+}
+
 #include "actor_statistic_mgr.h"
 void add_actor_points(const char* sect, const char* detail_key, int cnt, int pts)
 {
@@ -2065,6 +2091,10 @@ void CLevel::script_register(lua_State *L)
 		def("set_snd_volume",					&set_snd_volume),
 		def("is_inventory_volume_enabled",		&is_inventory_volume_enabled),
 		def("set_inventory_volume_enabled",		&set_inventory_volume_enabled),
+		def("is_wsui_enabled",					&is_wsui_enabled),
+		def("set_wsui_enabled",					&set_wsui_enabled),
+		def("get_wsui_bool",					&get_wsui_bool),
+		def("set_wsui_bool",					&set_wsui_bool),
 		def("add_cam_effector",					(float (*)(const char*, int, bool, const char*))&add_cam_effector),
 		def("add_cam_effector",					(float (*)(const char*, int, bool, const char*, float))&add_cam_effector),
 		def("add_cam_effector",					(float (*)(const char*, int, bool, const char*, float, bool))&add_cam_effector),

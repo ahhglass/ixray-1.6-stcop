@@ -264,12 +264,20 @@ public:
 	void OnRender();
 	void OnMouseWheel(int direction);
 
+	void SetScriptEnabled(bool enabled);
+	bool GetScriptBool(LPCSTR key) const;
+	void SetScriptBool(LPCSTR key, bool value);
+	bool IsConfigLoaded() const { return m_config_loaded; }
+
 	static bool IsEnabled();
 	static bool ShouldSuppressVanilla();
 	static bool ShouldSuppressNpcName(float distance);
 	static bool ShouldSuppressTutorialUi();
 
 private:
+	bool IsRuntimeEnabled() const;
+	void ClearMarkerState();
+
 	void LoadClassDefs();
 	void LoadLookupSection(LPCSTR section_name, bool is_pos_adj);
 	void LoadFloatLookupSection(LPCSTR section_name, xr_map<shared_str, float>& out);
@@ -373,6 +381,8 @@ private:
 	u32 GetEffectiveScanIntervalMs(CActor* actor) const;
 
 private:
+	bool m_config_loaded = false;
+	s8 m_script_enabled_override = -1;
 	bool m_enabled = false;
 	bool m_suppress_vanilla = true;
 	bool m_suppress_tutorial_ui = true;
