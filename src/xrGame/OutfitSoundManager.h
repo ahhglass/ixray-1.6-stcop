@@ -50,6 +50,9 @@ enum ESoundType
 	eSoundCrouchSlowOut,
 	eSoundLookout,
 	eSoundLand,
+	eSoundBackpackRustle,
+	eSoundBackpackJump,
+	eSoundBackpackLand,
 	eSoundDeflectionArmor,
 	eSoundDeflectionHelmet,
 	eSoundCount
@@ -82,6 +85,9 @@ public:
 	void LoadCrouchSlowOut(const shared_str& sect) { LoadSoundByType(eSoundCrouchSlowOut, sect); }
 	void LoadLookout(const shared_str& sect) { LoadSoundByType(eSoundLookout, sect); }
 	void LoadLand(const shared_str& sect) { LoadSoundByType(eSoundLand, sect); }
+	void LoadBackpackRustle(const shared_str& sect) { LoadSoundByType(eSoundBackpackRustle, sect); }
+	void LoadBackpackJump(const shared_str& sect) { LoadSoundByType(eSoundBackpackJump, sect); }
+	void LoadBackpackLand(const shared_str& sect) { LoadSoundByType(eSoundBackpackLand, sect); }
 	void LoadDeflectionSounds(const shared_str& sound_path) { LoadSoundByType(eSoundDeflectionArmor, sound_path); }
 	void LoadHelmetDeflectionSounds(const shared_str& sound_path) { LoadSoundByType(eSoundDeflectionHelmet, sound_path); }
 	void LoadNPCHitSounds();
@@ -94,11 +100,15 @@ public:
 	void PlayCrouchSlowIn(bool hud_view, CObject* owner);
 	void PlayCrouchSlowOut(bool hud_view, CObject* owner);
 	void PlayLookout(bool hud_view, CObject* owner);
+	void PlayBackpackRustle(float power, bool hud_view, CObject* owner);
+	void PlayBackpackJump(bool hud_view, CObject* owner);
+	void PlayBackpackLand(bool hud_view, CObject* owner);
 
 	void OnActorHit(SHit* pHit, u16 bone_id);
 	void OnNPCHit(CEntityAlive* npc, SHit* pHit, u16 bone_id);
 
 	void Clear();
+	void ClearBackpackSounds();
 	void ResetToDefault();
 	void ClearDeflectionSounds() { ClearSoundType(eSoundDeflectionArmor); }
 	void ClearHelmetDeflectionSounds() { ClearSoundType(eSoundDeflectionHelmet); }

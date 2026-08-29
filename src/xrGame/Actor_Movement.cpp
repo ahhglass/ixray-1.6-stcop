@@ -79,6 +79,7 @@ void CActor::g_cl_ValidateMState(float dt, u32 mstate_wf)
 			}
 
 			m_outfit_snd.PlayLand(!!HUDview(), this); //lxrd
+			m_outfit_snd.PlayBackpackLand(!!HUDview(), this);
 		}
 
 		PlayRainStep(!!HUDview());
@@ -247,6 +248,7 @@ void CActor::g_cl_CheckControls(u32 mstate_wf, Fvector &vControlAccel, float &Ju
 
 			PlayRainStep(!!HUDview());
 			m_outfit_snd.PlayJump(!!HUDview(), this);
+			m_outfit_snd.PlayBackpackJump(!!HUDview(), this);
 			PlayExoStep(!!HUDview());
 
 			//уменьшить силу игрока из-за выполненого прыжка

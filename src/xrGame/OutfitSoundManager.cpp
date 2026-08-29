@@ -29,6 +29,12 @@ namespace DeflectionConstants
 	const float JUMP_SOUND_VOLUME_MAX = 2.5f;
 	const float LAND_SOUND_VOLUME_MIN = 1.2f;
 	const float LAND_SOUND_VOLUME_MAX = 1.8f;
+	const float BACKPACK_RUSTLE_SOUND_VOLUME_MIN = 0.6f;
+	const float BACKPACK_RUSTLE_SOUND_VOLUME_MAX = 1.0f;
+	const float BACKPACK_JUMP_SOUND_VOLUME_MIN = 0.8f;
+	const float BACKPACK_JUMP_SOUND_VOLUME_MAX = 1.2f;
+	const float BACKPACK_LAND_SOUND_VOLUME_MIN = 0.6f;
+	const float BACKPACK_LAND_SOUND_VOLUME_MAX = 1.0f;
 	const float NPC_HIT_SOUND_VOLUME_MIN = 0.9f;
 	const float NPC_HIT_SOUND_VOLUME_MAX = 1.1f;
 	const float NPC_HIT_SOUND_RANGE_MIN = 1.0f;
@@ -107,6 +113,7 @@ void COutfitSoundManager::LoadSoundByType(ESoundType type, const shared_str& sec
 	static const LPCSTR tags[] = {
 		"clank", "rustle", "jump",
 		"crouch_in", "crouch_out", "crouch_slow_in", "crouch_slow_out", "lookout", "land",
+		"backpack_rustle", "backpack_jump", "backpack_land",
 		"deflection", "helmet_deflection"
 	};
 
@@ -168,6 +175,13 @@ void COutfitSoundManager::Clear()
 			snd.destroy();
 		_npcSounds[i].clear();
 	}
+}
+
+void COutfitSoundManager::ClearBackpackSounds()
+{
+	ClearSoundType(eSoundBackpackRustle);
+	ClearSoundType(eSoundBackpackJump);
+	ClearSoundType(eSoundBackpackLand);
 }
 
 void COutfitSoundManager::ResetToDefault()
@@ -335,6 +349,31 @@ void COutfitSoundManager::PlayLookout(bool hud_view, CObject* owner)
 		PlayMotion(eSoundLookout, hud_view, owner, RUSTLE_SOUND_VOLUME_MIN, RUSTLE_SOUND_VOLUME_MAX);
 	else
 		PlayMotion(eSoundRustle, hud_view, owner, RUSTLE_SOUND_VOLUME_MIN, RUSTLE_SOUND_VOLUME_MAX);
+}
+
+void COutfitSoundManager::PlayBackpackRustle(float power, bool hud_view, CObject* owner)
+{
+	if (owner == nullptr)
+		return;
+
+	using namespace DeflectionConstants;
+
+	if (_useHudSound[eSoundBackpackRustle])
+		PlayHudSound(eSoundBackpackRustle, hud_view, owner, nullptr);
+	else
+		PlaySound(_sounds[eSoundBackpackRustle], BACKPACK_RUSTLE_SOUND_VOLUME_MIN, BACKPACK_RUSTLE_SOUND_VOLUME_MAX, hud_view, owner, nullptr, power);
+}
+
+void COutfitSoundManager::PlayBackpackJump(bool hud_view, CObject* owner)
+{
+	using namespace DeflectionConstants;
+	PlayMotion(eSoundBackpackJump, hud_view, owner, BACKPACK_JUMP_SOUND_VOLUME_MIN, BACKPACK_JUMP_SOUND_VOLUME_MAX);
+}
+
+void COutfitSoundManager::PlayBackpackLand(bool hud_view, CObject* owner)
+{
+	using namespace DeflectionConstants;
+	PlayMotion(eSoundBackpackLand, hud_view, owner, BACKPACK_LAND_SOUND_VOLUME_MIN, BACKPACK_LAND_SOUND_VOLUME_MAX);
 }
 
 void COutfitSoundManager::LoadSettings()

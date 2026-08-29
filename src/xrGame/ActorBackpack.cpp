@@ -2,6 +2,7 @@
 #include "ActorBackpack.h"
 #include "Actor.h"
 #include "Inventory.h"
+#include "OutfitSoundManager.h"
 //#include "../../xrSound/ai_sounds.h"
 
 static constexpr const char* backpack_on = "interface\\inv_backpack_on";
@@ -24,6 +25,10 @@ void CBackpack::Load(const char* section)
     m_additional_weight2 = READ_IF_EXISTS(pSettings, r_float, section, "additional_inventory_weight2", 0.0f);
     m_fPowerRestoreSpeed = READ_IF_EXISTS(pSettings, r_float, section, "power_restore_speed", 0.0f);
 
+    m_SoundRustle = READ_IF_EXISTS(pSettings, r_string, section, "backpack_sound_rustle", "");
+    m_SoundJump = READ_IF_EXISTS(pSettings, r_string, section, "backpack_sound_jump", "");
+    m_SoundLand = READ_IF_EXISTS(pSettings, r_string, section, "backpack_sound_land", "");
+
     m_flags.set(FUsingCondition, READ_IF_EXISTS(pSettings, r_bool, section, "use_condition", false));
 }
 
@@ -36,6 +41,15 @@ void CBackpack::OnMoveToSlot(const SInvItemPlace& previous_place)
         //m_dress_snd[0].destroy();
         //m_dress_snd[0].play(this, sm_2D);
     }
+
+    CActor* pActor = H_Parent() ? H_Parent()->cast_actor() : nullptr;
+    if (!pActor)
+        return;
+
+    // Звуки движения рюкзака (параллельно броне)
+    pActor->m_outfit_snd.LoadBackpackRustle(m_SoundRustle);
+    pActor->m_outfit_snd.LoadBackpackJump(m_SoundJump);
+    pActor->m_outfit_snd.LoadBackpackLand(m_SoundLand);
 }
 
 void CBackpack::OnMoveToRuck(const SInvItemPlace& previous_place)
@@ -46,6 +60,10 @@ void CBackpack::OnMoveToRuck(const SInvItemPlace& previous_place)
     {
         //m_dress_snd[1].destroy();
         //m_dress_snd[1].play(this, sm_2D);
+
+        CActor* pActor = H_Parent() ? H_Parent()->cast_actor() : nullptr;
+        if (pActor)
+            pActor->m_outfit_snd.ClearBackpackSounds();
     }
 }
 
@@ -56,6 +74,9 @@ bool CBackpack::install_upgrade_impl(const char* section, bool test)
     result |= process_if_exists(section, "additional_inventory_weight", m_additional_weight, test);
     result |= process_if_exists(section, "additional_inventory_weight2", m_additional_weight2, test);
     result |= process_if_exists(section, "power_restore_speed", m_fPowerRestoreSpeed, test);
+    result |= process_if_exists_set(section, "backpack_sound_rustle", m_SoundRustle, test);
+    result |= process_if_exists_set(section, "backpack_sound_jump", m_SoundJump, test);
+    result |= process_if_exists_set(section, "backpack_sound_land", m_SoundLand, test);
 
     return result;
 }

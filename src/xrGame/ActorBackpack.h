@@ -26,6 +26,10 @@ public:
     float m_additional_weight2 = 0.0f;
     float m_fPowerRestoreSpeed = 0.0f;
 
+    shared_str m_SoundRustle;
+    shared_str m_SoundJump;
+    shared_str m_SoundLand;
+
 protected:
     virtual bool install_upgrade_impl(const char* section, bool test) override;
 };

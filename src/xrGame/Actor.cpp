@@ -1207,7 +1207,10 @@ void CActor::FootStepCallback(float power, bool b_play, bool b_on_ground, bool b
 
 	// Play custom outfit step sounds / Звуки шагов костюма
 	if (b_play && b_on_ground)
+	{
 		m_outfit_snd.Play(power, b_hud_view, this); //lxrd
+		m_outfit_snd.PlayBackpackRustle(power, b_hud_view, this);
+	}
 
 	CGameObject::FootStepCallback(power, b_play, b_on_ground, b_hud_view);
 }
