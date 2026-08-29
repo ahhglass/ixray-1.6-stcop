@@ -76,6 +76,7 @@
 #include "ElectronicsProblemsManager.h"
 
 #include "UIWorldSpace.h"
+#include "ui/UIInteractionMarkers.h"
 
 extern CUISequencer * g_tutorial;
 extern CUISequencer * g_tutorial2;
@@ -205,6 +206,9 @@ CLevel::CLevel():
 	GCondlistGC = new CCondlistGarbageCollector;
 
 	WorldSpaceUIManager = new CUIWorldSpaceManager();
+	InteractionMarkerManager = new CInteractionMarkerManager();
+	g_pInteractionMarkerManager = InteractionMarkerManager;
+	InteractionMarkerManager->Load();
 
 #if defined(IXRAY_USE_LUA_AND_CPP_IMPLEMENTATION) || \
 	defined(IXRAY_USE_CPP_ONLY_IMPLEMENTATION)
@@ -352,6 +356,8 @@ CLevel::~CLevel()
 	m_chunk->close();
 	FS.r_close(spawn);
 
+	xr_delete(InteractionMarkerManager);
+	g_pInteractionMarkerManager = nullptr;
 	xr_delete(WorldSpaceUIManager);
 }
 
@@ -592,6 +598,11 @@ void CLevel::OnFrame()
 	if (GCondlistGC != nullptr)
 	{
 		GCondlistGC->Update();
+	}
+
+	if (InteractionMarkerManager)
+	{
+		InteractionMarkerManager->Update();
 	}
 
 	Fvector	temp_vector;

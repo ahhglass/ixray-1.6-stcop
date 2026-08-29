@@ -1,4 +1,5 @@
 #include "StdAfx.h"
+#include "ui/UIInteractionMarkers.h"
 
 #include "UIMainIngameWnd.h"
 #include "UIMessagesWindow.h"
@@ -1279,6 +1280,13 @@ void CUIMainIngameWnd::Update()
 
 void CUIMainIngameWnd::RenderQuickInfos()
 {
+	if (CInteractionMarkerManager::ShouldSuppressVanilla())
+	{
+		if (UIStaticQuickHelp)
+			UIStaticQuickHelp->Show(false);
+		return;
+	}
+
 	CActor* pActor = Level().CurrentViewEntity() ? Level().CurrentViewEntity()->cast_actor() : nullptr;
 	if (!pActor)
 	{
@@ -1556,6 +1564,12 @@ void CUIMainIngameWnd::SetPickUpItem	(CInventoryItem* PickUpItem)
 
 void CUIMainIngameWnd::UpdatePickUpItem	()
 {
+	if (CInteractionMarkerManager::ShouldSuppressVanilla())
+	{
+		UIPickUpItemIcon->Show(false);
+		return;
+	}
+
 	if (!m_pPickUpItem || !Level().CurrentViewEntity() || !Level().CurrentViewEntity()->cast_actor()) 
 	{
 		UIPickUpItemIcon->Show(false);

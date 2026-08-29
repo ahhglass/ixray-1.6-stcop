@@ -1,6 +1,7 @@
 #include "StdAfx.h"
 #include "pch_script.h"
 #include "UIGameTutorial.h"
+#include "ui/UIInteractionMarkers.h"
 #include "../../xrUI/Widgets/UIWindow.h"
 #include "../../xrUI/Widgets/UIStatic.h"
 #include "../../xrUI/UIXmlInit.h"
@@ -316,8 +317,11 @@ void CUISequencer::OnFrame()
 
 void CUISequencer::OnRender	()
 {
-	if (m_UIWindow->IsShown())	
-		m_UIWindow->Draw();
+	if (m_UIWindow->IsShown())
+	{
+		if (!CInteractionMarkerManager::ShouldSuppressTutorialUi())
+			m_UIWindow->Draw();
+	}
 
 	VERIFY(m_sequencer_items.size());
 	m_sequencer_items.front()->OnRender	();

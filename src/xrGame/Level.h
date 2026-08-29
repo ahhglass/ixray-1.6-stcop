@@ -19,6 +19,7 @@
 #include "FreeMP/ScriptEvents.h"
 
 #include "UIWorldSpace.h"
+#include "ui/UIInteractionMarkers.h"
 
 // always try to forward declare your script implementations
 class CRandomManager;
@@ -51,6 +52,7 @@ class	demo_info;
 class CElectronicsProblemsManager;
 
 class CUIWorldSpaceManager;
+class CInteractionMarkerManager;
 
 #ifdef DEBUG_DRAW
 	class	CDebugRenderer;
@@ -463,6 +465,7 @@ public:
 	void UnLockActor();
 
 	CUIWorldSpaceManager* WorldSpaceUIManager = nullptr;
+	CInteractionMarkerManager* InteractionMarkerManager = nullptr;
 
 	DECLARE_SCRIPT_REGISTER_FUNCTION
 };

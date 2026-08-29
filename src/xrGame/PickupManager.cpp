@@ -1,5 +1,6 @@
 #include "StdAfx.h"
 #include "PickupManager.h"
+#include "ui/UIInteractionMarkers.h"
 #include "Actor.h"
 #include "inventory_item.h"
 #include "../xrEngine/GameMtlLib.h"
@@ -23,6 +24,9 @@ CPickUpManager::CPickUpManager(CActor* NewOwner) :
 
 void CPickUpManager::RenderInfo()
 {
+	if (CInteractionMarkerManager::ShouldSuppressVanilla())
+		return;
+
 	Owner->feel_touch_update(Owner->cam_FirstEye()->vPosition, PickupInfoRadius);
 
 	xr_vector<CObject*> visibleItems;

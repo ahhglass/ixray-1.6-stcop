@@ -1525,7 +1525,7 @@ u32 get_build_id()
 
 extern ENGINE_API float psHUD_FOV;
 
-Fvector2 World2Ui(Fvector pos, bool hud)
+Fvector2 World2Ui(Fvector pos, bool hud, bool allow_offscreen)
 {
 	Fmatrix world = {}, res = {};
 	world.identity();
@@ -1557,7 +1557,7 @@ Fvector2 World2Ui(Fvector pos, bool hud)
 	vRes.z = res._43 / vRes.w;
 
 	if (vRes.z < 0 || vRes.w < 0) return { -9999,0 };
-	if (abs(vRes.x) > 1.f || abs(vRes.y) > 1.f) return { -9999,0 };
+	if (!allow_offscreen && (abs(vRes.x) > 1.f || abs(vRes.y) > 1.f)) return { -9999,0 };
 
 	float x = (1.f + vRes.x) / 2.f * Device.TargetWidth;
 	float y = (1.f - vRes.y) / 2.f * Device.TargetHeight;
@@ -1569,6 +1569,11 @@ Fvector2 World2Ui(Fvector pos, bool hud)
 	y /= heightFk;
 
 	return { x, y };
+}
+
+static Fvector2 World2UiScript(Fvector pos, bool hud)
+{
+	return World2Ui(pos, hud, false);
 }
 
 void jump_level(const Fvector& m_position, u32 m_level_vertex_id, GameGraph::_GRAPH_ID m_game_vertex_id, const Fvector& m_angles)
@@ -2294,7 +2299,7 @@ void CLevel::script_register(lua_State *L)
 			def("translate_string",		&translate_string),
 			def("current_language",		&current_language),
 			def("reload_language", &ReloadLanguage),
-			def("world2ui", &World2Ui),
+			def("world2ui", &World2UiScript),
 			def("jump_level", &jump_level)
 	];
 }

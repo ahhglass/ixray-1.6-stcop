@@ -1,4 +1,5 @@
 #include "StdAfx.h"
+#include "ui/UIInteractionMarkers.h"
 #include "HUDTarget.h"
 #include "../xrEngine/GameMtlLib.h"
 
@@ -245,14 +246,17 @@ void CHUDTarget::Render()
 							C = colorFriend; break;
 						}
 
-						targetFont->SetColor(subst_alpha(C, static_cast<u32>(lerp(0.f, 255.f, accumulatedTime))));
-						targetFont->OutNext("%s", *g_pStringTable->translate(others_inv_owner->Name()));
-						targetFont->OutNext("%s", *g_pStringTable->translate(others_inv_owner->CharacterInfo().Community().id()));
+						if (!CInteractionMarkerManager::ShouldSuppressNpcName(PP.RQ.range))
+						{
+							targetFont->SetColor(subst_alpha(C, static_cast<u32>(lerp(0.f, 255.f, accumulatedTime))));
+							targetFont->OutNext("%s", *g_pStringTable->translate(others_inv_owner->Name()));
+							targetFont->OutNext("%s", *g_pStringTable->translate(others_inv_owner->CharacterInfo().Community().id()));
+						}
 					}
 				}
 				accumulatedTime += SHOW_INFO_SPEED * Device.fTimeDelta;
 			}
-			else if (l_pI && our_inv_owner && PP.RQ.range < 2.0f * 2.0f)
+			else if (l_pI && our_inv_owner && PP.RQ.range < 2.0f * 2.0f && !CInteractionMarkerManager::ShouldSuppressVanilla())
 			{
 				if (l_pI->NameItem() && l_pI->CanTake())
 				{

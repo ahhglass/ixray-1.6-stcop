@@ -9,6 +9,7 @@
 #include "HUDManager.h"
 #include "../xrEngine/CameraBase.h"
 #include "PickupManager.h"
+#include "ui/UIInteractionMarkers.h"
 #include "ai/monsters/ai_monster_utils.h"
 
 bool g_b_COD_PickUpMode = true;
@@ -217,7 +218,10 @@ void CActor::PickupModeUpdate_COD()
 
 	if (!g_dedicated_server)
 	{
-		CurrentGameUI()->UIMainIngameWnd->SetPickUpItem(pNearestItem);
+		if (CInteractionMarkerManager::ShouldSuppressVanilla())
+			CurrentGameUI()->UIMainIngameWnd->SetPickUpItem(nullptr);
+		else
+			CurrentGameUI()->UIMainIngameWnd->SetPickUpItem(pNearestItem);
 	}
 
 	if (pNearestItem && pPickup->GetPickupMode())

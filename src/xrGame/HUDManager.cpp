@@ -19,6 +19,7 @@
 #include "../../xrUI/UIFontDefines.h"
 #include "pda_communication.h"
 #include "../../xrUI/UIHelper.h"
+#include "ui/UIInteractionMarkers.h"
 
 extern CUIGameCustom* CurrentGameUI() {return HUD().GetGameUI();}
 
@@ -188,6 +189,8 @@ void  CHUDManager::RenderUI()
 
 		m_pHUDTarget->Render();
 
+	if (g_pInteractionMarkerManager)
+		g_pInteractionMarkerManager->OnRender();
 
 	if( Device.Paused() && bShowPauseString)
 	{
