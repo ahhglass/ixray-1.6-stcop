@@ -196,6 +196,7 @@ private:
 
 	shared_str m_prompt_drop_texture;
 	shared_str m_prompt_keybind_texture;
+	shared_str m_prompt_keybind_pressed_texture;
 	float m_prompt_drop_height = 20.f;
 	float m_prompt_keybind_w = 15.f;
 	float m_prompt_keybind_h = 20.f;

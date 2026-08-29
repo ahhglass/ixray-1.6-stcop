@@ -1720,10 +1720,13 @@ void CInteractionMarkerManager::LoadPromptNodes(CUIXml& xml)
 
 	if (xml.NavigateToNode("prompt:keybind", 0))
 	{
+		m_prompt_keybind_pressed_texture = nullptr;
 		m_prompt_keybind_w = xml.ReadAttribFlt("prompt:keybind", 0, "width", m_prompt_keybind_w);
 		m_prompt_keybind_h = xml.ReadAttribFlt("prompt:keybind", 0, "height", m_prompt_keybind_h);
 		if (LPCSTR tex = xml.ReadAttrib("prompt:keybind", 0, "texture", nullptr))
 			m_prompt_keybind_texture = tex;
+		if (LPCSTR tex = xml.ReadAttrib("prompt:keybind", 0, "pressed", nullptr))
+			m_prompt_keybind_pressed_texture = tex;
 	}
 
 	if (xml.NavigateToNode("prompt:tutorial", 0))
@@ -2111,6 +2114,19 @@ float CInteractionMarkerManager::PromptTextHeight(CGameFont* font, float ky) con
 	return (font->CurrentHeight_() * m_font_scale_h) / ky;
 }
 
+namespace
+{
+bool IsUseKeyPressed()
+{
+	if (!pInput)
+		return false;
+
+	const int key1 = get_action_dik(kUSE, 0);
+	const int key2 = get_action_dik(kUSE, 1);
+	return (key1 > 0 && pInput->iGetAsyncKeyState(key1)) || (key2 > 0 && pInput->iGetAsyncKeyState(key2));
+}
+}
+
 void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWSUIPromptParts& parts_in, LPCSTR key_name, float alpha, bool center_anchor) const
 {
 	SWSUIPromptParts parts = parts_in;
@@ -2177,7 +2193,10 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 	if (has_key)
 	{
 		const float key_cx = cursor_x + key_w * 0.5f;
-		DrawTextureMarker(m_prompt_keybind_texture, key_cx, content_cy, key_w, key_h, ColorWithAlpha(0xFFFFFFFF, alpha), true);
+		const shared_str& key_tex = (m_prompt_keybind_pressed_texture.size() && IsUseKeyPressed())
+			? m_prompt_keybind_pressed_texture
+			: m_prompt_keybind_texture;
+		DrawTextureMarker(key_tex, key_cx, content_cy, key_w, key_h, ColorWithAlpha(0xFFFFFFFF, alpha), true);
 
 		const float font_h = key_font->CurrentHeight_() * m_font_scale_h;
 		key_font->SetAligment(CGameFont::alCenter);
