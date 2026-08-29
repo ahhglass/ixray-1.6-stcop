@@ -68,6 +68,137 @@ struct SWSUIItemCardMetric
 	u32 color = 0;
 };
 
+struct SWSUITextLabel
+{
+	float x = 0.f;
+	float y = 0.f;
+	shared_str font_name;
+	CGameFont* font = nullptr;
+	u32 color = 0;
+};
+
+struct SWSUIBackground
+{
+	bool enabled = false;
+	shared_str texture;
+	float height = 0.f;
+	float width = 0.f;
+	float pad = 0.f;
+	u32 color = 0;
+};
+
+struct SWSUIKeybindStyle
+{
+	shared_str texture;
+	shared_str pressed_texture;
+	float width = 0.f;
+	float height = 0.f;
+	float icon_width = 0.f;
+	float icon_height = 0.f;
+	SWSUITextLabel label;
+};
+
+struct SWSUIActionTextStyle
+{
+	SWSUITextLabel verb;
+	SWSUITextLabel object_name;
+	SWSUITextLabel full_line;
+};
+
+struct SWSUIItemConditionStyle
+{
+	float x = 0.f;
+	float y = 0.f;
+	float line_spacing = 0.f;
+	SWSUITextLabel label;
+	SWSUIBackground background;
+	u32 color_min = 0;
+	u32 color_max = 0;
+};
+
+struct SWSUIItemCardStyle
+{
+	float x = 0.f;
+	float y = 0.f;
+	SWSUIBackground background;
+	SWSUIItemCardMetric weight;
+	SWSUIItemCardMetric value;
+};
+
+struct SWSUIMarkersConfig
+{
+	struct SFeatures
+	{
+		bool hide_dots = false;
+		bool wheel_cycle_pickups = false;
+		bool special_icons_always = false;
+	} features;
+
+	struct SDistanceFade
+	{
+		bool enable_scale = false;
+		bool enable_alpha = false;
+		float min_scale = 0.f;
+		float max_scale = 0.f;
+		float min_alpha = 0.f;
+	} distance_fade;
+
+	struct SMarkerPriority
+	{
+		float task = 0.f;
+		float npc = 0.f;
+	} marker_priority;
+
+	u32 popin_duration_ms = 0;
+};
+
+struct SWSUIPromptConfig
+{
+	float ui_scale = 0.f;
+	float aspect_correction = 0.f;
+	float font_scale_w = 0.f;
+	float font_scale_h = 0.f;
+	float text_pad = 0.f;
+
+	struct SFeatures
+	{
+		bool item_stack_count = false;
+		bool item_condition = false;
+		bool item_card = false;
+		bool keybind = false;
+		bool fixed_screen = false;
+		float fixed_x = 0.f;
+		float fixed_y = 0.f;
+	} features;
+
+	float anchor_x = 0.f;
+	float anchor_y = 0.f;
+
+	struct SFadeAnimation
+	{
+		u32 fade_in_ms = 0;
+		u32 fade_out_ms = 0;
+	} fade_animation;
+
+	struct SMainPanel
+	{
+		SWSUIBackground background;
+		SWSUIKeybindStyle keybind;
+		SWSUIActionTextStyle action_text;
+	} main_panel;
+
+	struct SItemStackCount
+	{
+		float group_distance = 0.f;
+	} item_stack_count;
+
+	SWSUIItemConditionStyle item_condition;
+	SWSUIItemCardStyle item_card;
+
+	float tutorial_x = 0.f;
+	float tutorial_y = 0.f;
+};
+
 struct SWSUIPromptParts
 {
 	bool split = false;
@@ -114,8 +245,23 @@ private:
 	bool HasValidBone(CGameObject* obj, LPCSTR bone_name) const;
 	void UpdateAnimations(CActor* actor);
 	void LoadFocusSound();
-	void LoadPromptStyle();
-	void LoadPromptNodes(CUIXml& xml);
+	void LoadWsuiXml();
+	void LoadWsuiMarkers(CUIXml& xml);
+	void LoadWsuiPrompt(CUIXml& xml);
+	void LoadMarkersFeatures(CUIXml& xml);
+	void LoadMarkersDistanceFade(CUIXml& xml);
+	void LoadMarkersPriority(CUIXml& xml);
+	void LoadMarkersPopinAnimation(CUIXml& xml);
+	void LoadPromptLayout(CUIXml& xml);
+	void LoadPromptFeatures(CUIXml& xml);
+	void LoadPromptFadeAnimation(CUIXml& xml);
+	void LoadPromptMainPanel(CUIXml& xml);
+	void LoadPromptItemStackCount(CUIXml& xml);
+	void LoadPromptItemCondition(CUIXml& xml);
+	void LoadPromptItemCard(CUIXml& xml);
+	void LoadPromptTutorialScreen(CUIXml& xml);
+	void LoadTextLabel(CUIXml& xml, LPCSTR path, SWSUITextLabel& out);
+	void LoadBackground(CUIXml& xml, LPCSTR path, SWSUIBackground& out, bool read_enable = false);
 	void UpdateFocusSound(CActor* actor);
 	void PlayFocusSound() const;
 	float GetFocusPopinScale() const;
@@ -181,20 +327,6 @@ private:
 	bool m_enable_quest_scheme_scan = true;
 	bool m_enable_focus_sound = false;
 	bool m_focus_sound_loaded = false;
-	bool m_enable_item_stack_count = true;
-	bool m_enable_item_condition = true;
-	bool m_enable_special_icons_always = true;
-	bool m_enable_item_card = true;
-	bool m_dot_distance_scale = true;
-	bool m_dot_distance_fade = true;
-	bool m_hide_dots = false;
-	bool m_wheel_cycle_pickups = true;
-	bool m_prompt_fixed = false;
-	float m_dot_min_scale = 0.6f;
-	float m_dot_max_scale = 1.f;
-	float m_dot_min_alpha = 0.45f;
-	float m_marker_priority_task = 10000.f;
-	float m_marker_priority_npc = 3000.f;
 	float m_scan_radius = 5.f;
 	float m_prompt_distance = 4.f;
 	u32 m_max_markers = 10;
@@ -215,71 +347,9 @@ private:
 	Fvector m_los_cam_dir = {};
 	bool m_los_cam_valid = false;
 
-	float m_ui_scale = 1.f;
-	float m_aspect_correction = 1.f;
-	float m_font_scale_w = 1.f;
-	float m_font_scale_h = 1.f;
-	float m_anchor_x = 0.f;
-	float m_anchor_y = 0.f;
-	float m_key_text_x = 0.f;
-	float m_key_text_y = 0.f;
-	float m_verb_text_x = 0.f;
-	float m_verb_text_y = 0.f;
-	float m_full_text_x = 0.f;
-	float m_full_text_y = 0.f;
-	float m_tutorial_x = 0.f;
-	float m_tutorial_y = 0.f;
-	float m_prompt_fixed_x = 0.f;
-	float m_prompt_fixed_y = 0.f;
-
-	shared_str m_prompt_drop_texture;
-	shared_str m_prompt_keybind_texture;
-	shared_str m_prompt_keybind_pressed_texture;
-	shared_str m_item_card_drop_texture;
-	float m_item_card_x = 0.f;
-	float m_item_card_y = 0.f;
-	float m_item_card_drop_w = 0.f;
-	float m_item_card_drop_h = 0.f;
-	SWSUIItemCardMetric m_item_card_weight;
-	SWSUIItemCardMetric m_item_card_value;
-	float m_keybind_icon_w = 0.f;
-	float m_keybind_icon_h = 0.f;
-	float m_prompt_drop_height = 0.f;
-	float m_prompt_keybind_w = 0.f;
-	float m_prompt_keybind_h = 0.f;
-	float m_prompt_text_pad = 0.f;
-	float m_item_group_distance = 0.f;
-	float m_item_condition_line_spacing = 0.f;
-	float m_condition_text_x = 0.f;
-	float m_condition_text_y = 0.f;
-	bool m_condition_drop_enabled = false;
-	shared_str m_condition_drop_texture;
-	float m_condition_drop_w = 0.f;
-	float m_condition_drop_h = 0.f;
-	float m_condition_drop_pad = 0.f;
-	u32 m_condition_drop_color = 0;
-	u32 m_item_condition_color_min = 0;
-	u32 m_item_condition_color_max = 0;
-	u32 m_popin_anim_dur = 0;
-	u32 m_prompt_fade_in_time = 0;
-	u32 m_prompt_fade_out_time = 0;
-
-	shared_str m_prompt_ui_xml;
-	shared_str m_prompt_key_font_name;
-	shared_str m_prompt_verb_font_name;
-	shared_str m_prompt_name_font_name;
-	shared_str m_prompt_full_font_name;
-	shared_str m_prompt_condition_font_name;
-	CGameFont* m_prompt_key_font = nullptr;
-	CGameFont* m_prompt_verb_font = nullptr;
-	CGameFont* m_prompt_name_font = nullptr;
-	CGameFont* m_prompt_full_font = nullptr;
-	CGameFont* m_prompt_condition_font = nullptr;
-	u32 m_prompt_key_color = 0;
-	u32 m_prompt_verb_color = 0;
-	u32 m_prompt_name_color = 0;
-	u32 m_prompt_full_color = 0;
-	u32 m_prompt_condition_color = 0;
+	shared_str m_ui_xml;
+	SWSUIMarkersConfig m_markers_cfg;
+	SWSUIPromptConfig m_prompt_cfg;
 
 	HUD_SOUND_ITEM m_focus_snd;
 

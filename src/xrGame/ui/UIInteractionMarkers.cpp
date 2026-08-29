@@ -219,24 +219,8 @@ void CInteractionMarkerManager::Load()
 	HUD_SOUND_ITEM::DestroySound(m_focus_snd);
 	m_focus_sound_loaded = false;
 	m_enable_focus_sound = false;
-	m_enable_item_stack_count = true;
-	m_enable_item_condition = true;
-	m_enable_special_icons_always = true;
-	m_enable_item_card = true;
-	m_dot_distance_scale = true;
-	m_dot_distance_fade = true;
-	m_hide_dots = false;
-	m_wheel_cycle_pickups = true;
-	m_prompt_fixed = false;
-	m_dot_min_scale = 0.6f;
-	m_dot_max_scale = 1.f;
-	m_dot_min_alpha = 0.45f;
-	m_marker_priority_task = 10000.f;
-	m_marker_priority_npc = 3000.f;
-	m_prompt_fixed_x = 0.f;
-	m_prompt_fixed_y = 0.f;
-	m_item_card_weight = {};
-	m_item_card_value = {};
+	m_markers_cfg = {};
+	m_prompt_cfg = {};
 	m_wheel_focus_id = 0xffff;
 	m_engine_focus_id = 0xffff;
 	m_dik_icons.clear();
@@ -255,26 +239,14 @@ void CInteractionMarkerManager::Load()
 	m_dot_size = READ_IF_EXISTS(pSettings, r_float, "wsui", "dot_size", 12.f);
 	m_lerp_speed = READ_IF_EXISTS(pSettings, r_float, "wsui", "lerp_speed", 0.15f);
 	m_scan_interval_ms = READ_IF_EXISTS(pSettings, r_u32, "wsui", "scan_interval_ms", 150);
-	m_prompt_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "prompt_ui_xml", "ui_wsui_prompt.xml");
-	m_popin_anim_dur = READ_IF_EXISTS(pSettings, r_u32, "wsui", "popin_anim_dur", 500);
-	m_prompt_fade_in_time = READ_IF_EXISTS(pSettings, r_u32, "wsui", "prompt_fade_in_time", 250);
-	m_prompt_fade_out_time = READ_IF_EXISTS(pSettings, r_u32, "wsui", "prompt_fade_out_time", 150);
+	m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "ui_xml", nullptr);
+	if (!m_ui_xml.size())
+		m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "prompt_ui_xml", "ui_wsui.xml");
 	m_hide_mute_stalkers = READ_IF_EXISTS(pSettings, r_bool, "wsui", "hide_mute_stalkers", true);
 	m_enable_task_icons = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_task_icons", true);
 	m_suppress_tutorial_ui = READ_IF_EXISTS(pSettings, r_bool, "wsui", "suppress_tutorial_ui", true);
 	m_enable_quest_scheme_scan = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_quest_scheme_scan", true);
 	m_enable_focus_sound = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_focus_sound", false);
-	m_enable_special_icons_always = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_special_icons_always", true);
-	m_enable_item_card = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_item_card", true);
-	m_dot_distance_scale = READ_IF_EXISTS(pSettings, r_bool, "wsui", "dot_distance_scale", true);
-	m_dot_distance_fade = READ_IF_EXISTS(pSettings, r_bool, "wsui", "dot_distance_fade", true);
-	m_dot_min_scale = READ_IF_EXISTS(pSettings, r_float, "wsui", "dot_min_scale", 0.6f);
-	m_dot_max_scale = READ_IF_EXISTS(pSettings, r_float, "wsui", "dot_max_scale", 1.f);
-	m_dot_min_alpha = READ_IF_EXISTS(pSettings, r_float, "wsui", "dot_min_alpha", 0.45f);
-	m_marker_priority_task = READ_IF_EXISTS(pSettings, r_float, "wsui", "marker_priority_task", 10000.f);
-	m_marker_priority_npc = READ_IF_EXISTS(pSettings, r_float, "wsui", "marker_priority_npc", 3000.f);
-	m_hide_dots = READ_IF_EXISTS(pSettings, r_bool, "wsui", "hide_dots", false);
-	m_wheel_cycle_pickups = READ_IF_EXISTS(pSettings, r_bool, "wsui", "wheel_cycle_pickups", true);
 	LoadFocusSound();
 	LoadDikIcons();
 
@@ -288,7 +260,7 @@ void CInteractionMarkerManager::Load()
 	LoadTextureLookupSection("zone_textures_by_name", m_zone_textures_by_name);
 	LoadTextureLookupSection("zone_prompts_by_name", m_zone_prompts_by_name);
 	LoadTextureLookupSection("tutorial_prompts_by_name", m_tutorial_prompts_by_name);
-	LoadPromptStyle();
+	LoadWsuiXml();
 
 	if (m_enable_quest_scheme_scan)
 		BuildQuestSchemeIndex();
@@ -556,13 +528,13 @@ LPCSTR CInteractionMarkerManager::ResolveTutorialPrompt(LPCSTR tutorial_name) co
 
 float CInteractionMarkerManager::UiScale() const
 {
-	return m_ui_scale > 0.f ? m_ui_scale : 1.f;
+	return m_prompt_cfg.ui_scale > 0.f ? m_prompt_cfg.ui_scale : 1.f;
 }
 
 float CInteractionMarkerManager::AspectScaleX() const
 {
 	const float base = (Device.TargetWidth * UI_BASE_HEIGHT) / (Device.TargetHeight * UI_BASE_WIDTH);
-	return base * m_aspect_correction;
+	return base * m_prompt_cfg.aspect_correction;
 }
 
 bool CInteractionMarkerManager::IsBreakableBox(CGameObject* obj) const
@@ -810,7 +782,7 @@ float CInteractionMarkerManager::GetDoorVisualYOffset(CGameObject* obj) const
 
 shared_str CInteractionMarkerManager::ResolveActiveTexture(CGameObject* obj, EWSUIClass cls, const SWSUIClassDef& def, bool focused) const
 {
-	if (m_enable_special_icons_always && obj)
+	if (m_markers_cfg.features.special_icons_always && obj)
 	{
 		if (cls == EWSUIClass::Item && IsExplosiveObject(obj))
 			return "ui_wsui_marker_explosive";
@@ -1203,7 +1175,7 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 	if (focus_object)
 		m_engine_focus_id = focus_object->ID();
 
-	if (m_wheel_cycle_pickups && m_wheel_focus_id != 0xffff)
+	if (m_markers_cfg.features.wheel_cycle_pickups && m_wheel_focus_id != 0xffff)
 	{
 		auto wheel_it = m_markers.find(m_wheel_focus_id);
 		if (wheel_it != m_markers.end() && wheel_it->second.cls == EWSUIClass::Item)
@@ -1407,7 +1379,7 @@ float CInteractionMarkerManager::GetMarkerSortScore(u16 id, const SInteractionMa
 	{
 		bool is_storyline = false;
 		if (IsTaskTarget(id, is_storyline))
-			score += m_marker_priority_task;
+			score += m_markers_cfg.marker_priority.task;
 	}
 
 	if (id == m_focus_id)
@@ -1415,7 +1387,7 @@ float CInteractionMarkerManager::GetMarkerSortScore(u16 id, const SInteractionMa
 
 	switch (marker.cls)
 	{
-	case EWSUIClass::Npc: score += m_marker_priority_npc; break;
+	case EWSUIClass::Npc: score += m_markers_cfg.marker_priority.npc; break;
 	case EWSUIClass::Stash: score += 2000.f; break;
 	case EWSUIClass::Usable: score += 1500.f; break;
 	case EWSUIClass::Door: score += 1000.f; break;
@@ -1595,7 +1567,7 @@ void CInteractionMarkerManager::UpdateTutorialPromptFade()
 		m_tutorial_fade_start_alpha = m_tutorial_prompt_alpha;
 	}
 
-	const u32 fade_dur = want ? m_prompt_fade_in_time : m_prompt_fade_out_time;
+	const u32 fade_dur = want ? m_prompt_cfg.fade_animation.fade_in_ms : m_prompt_cfg.fade_animation.fade_out_ms;
 	const float target = want ? 1.f : 0.f;
 
 	if (!fade_dur)
@@ -1614,25 +1586,25 @@ void CInteractionMarkerManager::UpdateTutorialPromptFade()
 
 float CInteractionMarkerManager::GetDotDistanceScale(float distance, float show_distance) const
 {
-	if (!m_dot_distance_scale || show_distance <= 0.f)
+	if (!m_markers_cfg.distance_fade.enable_scale || show_distance <= 0.f)
 		return 1.f;
 
 	const float t = clampr(1.f - distance / show_distance, 0.f, 1.f);
-	return _lerp(m_dot_min_scale, m_dot_max_scale, t);
+	return _lerp(m_markers_cfg.distance_fade.min_scale, m_markers_cfg.distance_fade.max_scale, t);
 }
 
 float CInteractionMarkerManager::GetDotDistanceAlpha(float distance, float show_distance) const
 {
-	if (!m_dot_distance_fade || show_distance <= 0.f)
+	if (!m_markers_cfg.distance_fade.enable_alpha || show_distance <= 0.f)
 		return 1.f;
 
 	const float t = clampr(1.f - distance / show_distance, 0.f, 1.f);
-	return _lerp(m_dot_min_alpha, 1.f, t);
+	return _lerp(m_markers_cfg.distance_fade.min_alpha, 1.f, t);
 }
 
 void CInteractionMarkerManager::OnMouseWheel(int direction)
 {
-	if (!m_enabled || !m_wheel_cycle_pickups || !g_actor || !g_actor->g_Alive())
+	if (!m_enabled || !m_markers_cfg.features.wheel_cycle_pickups || !g_actor || !g_actor->g_Alive())
 		return;
 
 	if (ShouldHideUI() || ShouldSuspendMarkLoop())
@@ -1763,7 +1735,7 @@ void CInteractionMarkerManager::UpdatePromptFade(CActor* actor)
 	if (want)
 		m_prompt_focus_id = m_focus_id;
 
-	const u32 fade_dur = want ? m_prompt_fade_in_time : m_prompt_fade_out_time;
+	const u32 fade_dur = want ? m_prompt_cfg.fade_animation.fade_in_ms : m_prompt_cfg.fade_animation.fade_out_ms;
 	const float target = want ? 1.f : 0.f;
 
 	if (!fade_dur)
@@ -1787,11 +1759,11 @@ void CInteractionMarkerManager::UpdatePromptFade(CActor* actor)
 
 float CInteractionMarkerManager::GetFocusPopinScale() const
 {
-	if (!m_popin_anim_dur || m_focus_id == 0xffff || m_popin_focus_id != m_focus_id)
+	if (!m_markers_cfg.popin_duration_ms || m_focus_id == 0xffff || m_popin_focus_id != m_focus_id)
 		return 1.f;
 
 	const float elapsed = float(Device.dwTimeGlobal - m_popin_start_time);
-	const float t = elapsed / float(m_popin_anim_dur);
+	const float t = elapsed / float(m_markers_cfg.popin_duration_ms);
 	if (t >= 1.f)
 		return 1.f;
 
@@ -1799,80 +1771,259 @@ float CInteractionMarkerManager::GetFocusPopinScale() const
 	return min_scale + (1.f - min_scale) * EaseOutElastic(t);
 }
 
-void CInteractionMarkerManager::LoadPromptStyle()
+void CInteractionMarkerManager::LoadWsuiXml()
 {
-	CGameFont* default_font = g_FontManager ? g_FontManager->pFontSystem : nullptr;
-	m_prompt_key_font = default_font;
-	m_prompt_verb_font = default_font;
-	m_prompt_name_font = default_font;
-	m_prompt_full_font = default_font;
-	m_prompt_condition_font = default_font;
-	m_prompt_key_color = 0;
-	m_prompt_verb_color = 0;
-	m_prompt_name_color = 0;
-	m_prompt_full_color = 0;
-	m_prompt_condition_color = 0;
-	m_item_card_weight = {};
-	m_item_card_value = {};
-	m_item_card_drop_texture = nullptr;
-	m_item_card_x = 0.f;
-	m_item_card_y = 0.f;
-	m_item_card_drop_w = 0.f;
-	m_item_card_drop_h = 0.f;
-	m_condition_drop_enabled = false;
-	m_condition_drop_texture = nullptr;
-	m_condition_drop_w = 0.f;
-	m_condition_drop_h = 0.f;
-	m_condition_drop_pad = 0.f;
-	m_condition_drop_color = 0;
+	m_markers_cfg = {};
+	m_prompt_cfg = {};
 
-	if (!m_prompt_ui_xml.size())
+	if (!m_ui_xml.size())
 		return;
 
 	CUIXml xml;
-	if (!xml.Load(CONFIG_PATH, UI_PATH, m_prompt_ui_xml.c_str()))
+	if (!xml.Load(CONFIG_PATH, UI_PATH, m_ui_xml.c_str()))
 		return;
 
-	auto load_font_node = [&](LPCSTR path, CGameFont*& out_font, u32& out_color, shared_str& out_font_name, float* out_x = nullptr, float* out_y = nullptr)
+	LoadWsuiMarkers(xml);
+	LoadWsuiPrompt(xml);
+}
+
+void CInteractionMarkerManager::LoadWsuiMarkers(CUIXml& xml)
+{
+	LoadMarkersFeatures(xml);
+	LoadMarkersDistanceFade(xml);
+	LoadMarkersPriority(xml);
+	LoadMarkersPopinAnimation(xml);
+}
+
+void CInteractionMarkerManager::LoadMarkersFeatures(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_markers:features";
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	m_markers_cfg.features.hide_dots = xml.ReadAttribInt(path, 0, "hide_dots", 0) != 0;
+	m_markers_cfg.features.wheel_cycle_pickups = xml.ReadAttribInt(path, 0, "wheel_cycle_pickups", 0) != 0;
+	m_markers_cfg.features.special_icons_always = xml.ReadAttribInt(path, 0, "special_icons_always", 0) != 0;
+}
+
+void CInteractionMarkerManager::LoadMarkersDistanceFade(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_markers:distance_fade";
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	auto& cfg = m_markers_cfg.distance_fade;
+	cfg.enable_scale = xml.ReadAttribInt(path, 0, "enable_scale", 0) != 0;
+	cfg.enable_alpha = xml.ReadAttribInt(path, 0, "enable_alpha", 0) != 0;
+	cfg.min_scale = xml.ReadAttribFlt(path, 0, "min_scale", 0.f);
+	cfg.max_scale = xml.ReadAttribFlt(path, 0, "max_scale", 0.f);
+	cfg.min_alpha = xml.ReadAttribFlt(path, 0, "min_alpha", 0.f);
+}
+
+void CInteractionMarkerManager::LoadMarkersPriority(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_markers:marker_priority";
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	m_markers_cfg.marker_priority.task = xml.ReadAttribFlt(path, 0, "task", 0.f);
+	m_markers_cfg.marker_priority.npc = xml.ReadAttribFlt(path, 0, "npc", 0.f);
+}
+
+void CInteractionMarkerManager::LoadMarkersPopinAnimation(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_markers:popin_animation";
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	m_markers_cfg.popin_duration_ms = xml.ReadAttribInt(path, 0, "duration_ms", 0);
+}
+
+void CInteractionMarkerManager::LoadWsuiPrompt(CUIXml& xml)
+{
+	LoadPromptLayout(xml);
+	LoadPromptFeatures(xml);
+	LoadPromptFadeAnimation(xml);
+	LoadPromptMainPanel(xml);
+	LoadPromptItemStackCount(xml);
+	LoadPromptItemCondition(xml);
+	LoadPromptItemCard(xml);
+	LoadPromptTutorialScreen(xml);
+}
+
+void CInteractionMarkerManager::LoadPromptLayout(CUIXml& xml)
+{
+	const LPCSTR root = "wsui_prompt";
+	if (!xml.NavigateToNode(root, 0))
+		return;
+
+	m_prompt_cfg.ui_scale = xml.ReadAttribFlt(root, 0, "ui_scale", 0.f);
+	m_prompt_cfg.aspect_correction = xml.ReadAttribFlt(root, 0, "aspect_correction", 0.f);
+	m_prompt_cfg.font_scale_w = xml.ReadAttribFlt(root, 0, "font_scale_w", 0.f);
+	m_prompt_cfg.font_scale_h = xml.ReadAttribFlt(root, 0, "font_scale_h", 0.f);
+	m_prompt_cfg.text_pad = xml.ReadAttribFlt(root, 0, "text_pad", 0.f);
+
+	if (xml.NavigateToNode("wsui_prompt:anchor", 0))
 	{
-		if (!xml.NavigateToNode(path, 0))
-			return;
+		m_prompt_cfg.anchor_x = xml.ReadAttribFlt("wsui_prompt:anchor", 0, "x", 0.f);
+		m_prompt_cfg.anchor_y = xml.ReadAttribFlt("wsui_prompt:anchor", 0, "y", 0.f);
+	}
+}
 
-		if (out_x)
-			*out_x = xml.ReadAttribFlt(path, 0, "x", *out_x);
-		if (out_y)
-			*out_y = xml.ReadAttribFlt(path, 0, "y", *out_y);
+void CInteractionMarkerManager::LoadPromptFeatures(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_prompt:features";
+	if (!xml.NavigateToNode(path, 0))
+		return;
 
-		if (LPCSTR font_name = xml.ReadAttrib(path, 0, "font", nullptr))
-			out_font_name = font_name;
+	auto& f = m_prompt_cfg.features;
+	f.item_stack_count = xml.ReadAttribInt(path, 0, "item_stack_count", 0) != 0;
+	f.item_condition = xml.ReadAttribInt(path, 0, "item_condition", 0) != 0;
+	f.item_card = xml.ReadAttribInt(path, 0, "item_card", 0) != 0;
+	f.keybind = xml.ReadAttribInt(path, 0, "keybind", 0) != 0;
+	f.fixed_screen = xml.ReadAttribInt(path, 0, "fixed_screen", 0) != 0;
+	f.fixed_x = xml.ReadAttribFlt(path, 0, "fixed_x", 0.f);
+	f.fixed_y = xml.ReadAttribFlt(path, 0, "fixed_y", 0.f);
+}
 
-		CGameFont* loaded_font = nullptr;
-		u32 color = out_color;
-		if (CUIXmlInit::InitFont(xml, path, 0, color, loaded_font) && loaded_font)
-		{
-			out_font = loaded_font;
-			out_color = color;
-		}
-	};
+void CInteractionMarkerManager::LoadPromptFadeAnimation(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_prompt:fade_animation";
+	if (!xml.NavigateToNode(path, 0))
+		return;
 
-	load_font_node("prompt:key_text", m_prompt_key_font, m_prompt_key_color, m_prompt_key_font_name, &m_key_text_x, &m_key_text_y);
-	load_font_node("prompt:verb_text", m_prompt_verb_font, m_prompt_verb_color, m_prompt_verb_font_name, &m_verb_text_x, &m_verb_text_y);
-	load_font_node("prompt:name_text", m_prompt_name_font, m_prompt_name_color, m_prompt_name_font_name);
-	load_font_node("prompt:full_text", m_prompt_full_font, m_prompt_full_color, m_prompt_full_font_name, &m_full_text_x, &m_full_text_y);
-	load_font_node("prompt:condition_text", m_prompt_condition_font, m_prompt_condition_color, m_prompt_condition_font_name, &m_condition_text_x, &m_condition_text_y);
+	m_prompt_cfg.fade_animation.fade_in_ms = xml.ReadAttribInt(path, 0, "fade_in_ms", 0);
+	m_prompt_cfg.fade_animation.fade_out_ms = xml.ReadAttribInt(path, 0, "fade_out_ms", 0);
+}
 
-	if (!m_prompt_key_font)
-		m_prompt_key_font = default_font;
-	if (!m_prompt_verb_font)
-		m_prompt_verb_font = default_font;
-	if (!m_prompt_name_font)
-		m_prompt_name_font = default_font;
-	if (!m_prompt_full_font)
-		m_prompt_full_font = m_prompt_verb_font ? m_prompt_verb_font : default_font;
-	if (!m_prompt_condition_font)
-		m_prompt_condition_font = m_prompt_name_font ? m_prompt_name_font : default_font;
+void CInteractionMarkerManager::LoadTextLabel(CUIXml& xml, LPCSTR path, SWSUITextLabel& out)
+{
+	if (!xml.NavigateToNode(path, 0))
+		return;
 
-	LoadPromptNodes(xml);
+	out.x = xml.ReadAttribFlt(path, 0, "x", 0.f);
+	out.y = xml.ReadAttribFlt(path, 0, "y", 0.f);
+	if (LPCSTR font_name = xml.ReadAttrib(path, 0, "font", nullptr))
+		out.font_name = font_name;
+
+	u32 color = 0;
+	CGameFont* loaded_font = nullptr;
+	if (CUIXmlInit::InitFont(xml, path, 0, color, loaded_font) && loaded_font)
+	{
+		out.font = loaded_font;
+		out.color = color;
+	}
+}
+
+void CInteractionMarkerManager::LoadBackground(CUIXml& xml, LPCSTR path, SWSUIBackground& out, bool read_enable)
+{
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	if (read_enable)
+		out.enabled = xml.ReadAttribInt(path, 0, "enable", 0) != 0;
+	else
+		out.enabled = true;
+
+	if (LPCSTR tex = xml.ReadAttrib(path, 0, "texture", nullptr))
+		out.texture = tex;
+	out.height = xml.ReadAttribFlt(path, 0, "height", 0.f);
+	out.width = xml.ReadAttribFlt(path, 0, "width", 0.f);
+	out.pad = xml.ReadAttribFlt(path, 0, "pad", 0.f);
+
+	const int r = xml.ReadAttribInt(path, 0, "r", 255);
+	const int g = xml.ReadAttribInt(path, 0, "g", 255);
+	const int b = xml.ReadAttribInt(path, 0, "b", 255);
+	const int a = xml.ReadAttribInt(path, 0, "a", 255);
+	if (r != 255 || g != 255 || b != 255 || a != 255)
+		out.color = color_rgba(r, g, b, a);
+}
+
+void CInteractionMarkerManager::LoadPromptMainPanel(CUIXml& xml)
+{
+	LoadBackground(xml, "wsui_prompt:main_panel:background", m_prompt_cfg.main_panel.background);
+
+	if (xml.NavigateToNode("wsui_prompt:main_panel:keybind", 0))
+	{
+		const LPCSTR path = "wsui_prompt:main_panel:keybind";
+		auto& kb = m_prompt_cfg.main_panel.keybind;
+		kb.width = xml.ReadAttribFlt(path, 0, "width", 0.f);
+		kb.height = xml.ReadAttribFlt(path, 0, "height", 0.f);
+		kb.icon_width = xml.ReadAttribFlt(path, 0, "icon_width", 0.f);
+		kb.icon_height = xml.ReadAttribFlt(path, 0, "icon_height", 0.f);
+		if (LPCSTR tex = xml.ReadAttrib(path, 0, "texture", nullptr))
+			kb.texture = tex;
+		if (LPCSTR tex = xml.ReadAttrib(path, 0, "pressed_texture", nullptr))
+			kb.pressed_texture = tex;
+		LoadTextLabel(xml, "wsui_prompt:main_panel:keybind:label", kb.label);
+	}
+
+	auto& at = m_prompt_cfg.main_panel.action_text;
+	LoadTextLabel(xml, "wsui_prompt:main_panel:action_text:verb", at.verb);
+	LoadTextLabel(xml, "wsui_prompt:main_panel:action_text:object_name", at.object_name);
+	LoadTextLabel(xml, "wsui_prompt:main_panel:action_text:full_line", at.full_line);
+}
+
+void CInteractionMarkerManager::LoadPromptItemStackCount(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_prompt:item_stack_count";
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	m_prompt_cfg.item_stack_count.group_distance = xml.ReadAttribFlt(path, 0, "group_distance", 0.f);
+}
+
+void CInteractionMarkerManager::LoadPromptItemCondition(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_prompt:item_condition";
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	auto& cond = m_prompt_cfg.item_condition;
+	cond.x = xml.ReadAttribFlt(path, 0, "x", 0.f);
+	cond.y = xml.ReadAttribFlt(path, 0, "y", 0.f);
+	cond.line_spacing = xml.ReadAttribFlt(path, 0, "line_spacing", 0.f);
+	LoadTextLabel(xml, "wsui_prompt:item_condition:label", cond.label);
+	LoadBackground(xml, "wsui_prompt:item_condition:background", cond.background, true);
+
+	const LPCSTR grad_path = "wsui_prompt:item_condition:color_gradient";
+	if (xml.NavigateToNode(grad_path, 0))
+	{
+		const int min_r = xml.ReadAttribInt(grad_path, 0, "min_r", 0);
+		const int min_g = xml.ReadAttribInt(grad_path, 0, "min_g", 0);
+		const int min_b = xml.ReadAttribInt(grad_path, 0, "min_b", 0);
+		const int min_a = xml.ReadAttribInt(grad_path, 0, "min_a", 0);
+		const int max_r = xml.ReadAttribInt(grad_path, 0, "max_r", 0);
+		const int max_g = xml.ReadAttribInt(grad_path, 0, "max_g", 0);
+		const int max_b = xml.ReadAttribInt(grad_path, 0, "max_b", 0);
+		const int max_a = xml.ReadAttribInt(grad_path, 0, "max_a", 0);
+		cond.color_min = color_rgba(min_r, min_g, min_b, min_a);
+		cond.color_max = color_rgba(max_r, max_g, max_b, max_a);
+	}
+}
+
+void CInteractionMarkerManager::LoadPromptItemCard(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_prompt:item_card";
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	auto& card = m_prompt_cfg.item_card;
+	card.x = xml.ReadAttribFlt(path, 0, "x", 0.f);
+	card.y = xml.ReadAttribFlt(path, 0, "y", 0.f);
+	LoadBackground(xml, "wsui_prompt:item_card:background", card.background);
+	LoadItemCardMetric(xml, "wsui_prompt:item_card:weight_metric", card.weight);
+	LoadItemCardMetric(xml, "wsui_prompt:item_card:value_metric", card.value);
+}
+
+void CInteractionMarkerManager::LoadPromptTutorialScreen(CUIXml& xml)
+{
+	const LPCSTR path = "wsui_prompt:tutorial_screen";
+	if (!xml.NavigateToNode(path, 0))
+		return;
+
+	m_prompt_cfg.tutorial_x = xml.ReadAttribFlt(path, 0, "x", 0.f);
+	m_prompt_cfg.tutorial_y = xml.ReadAttribFlt(path, 0, "y", 0.f);
 }
 
 void CInteractionMarkerManager::LoadItemCardMetric(CUIXml& xml, LPCSTR path, SWSUIItemCardMetric& out) const
@@ -1891,7 +2042,6 @@ void CInteractionMarkerManager::LoadItemCardMetric(CUIXml& xml, LPCSTR path, SWS
 	if (LPCSTR tex = xml.ReadAttrib(path, 0, "icon", nullptr))
 		out.icon = tex;
 
-	CGameFont* default_font = g_FontManager ? g_FontManager->pFontSystem : nullptr;
 	if (LPCSTR font_name = xml.ReadAttrib(path, 0, "font", nullptr))
 		out.font_name = font_name;
 
@@ -1902,110 +2052,8 @@ void CInteractionMarkerManager::LoadItemCardMetric(CUIXml& xml, LPCSTR path, SWS
 		out.font = loaded_font;
 		out.color = color;
 	}
-	else if (default_font)
-	{
-		out.font = default_font;
-	}
-}
-
-void CInteractionMarkerManager::LoadPromptNodes(CUIXml& xml)
-{
-	const LPCSTR root = "prompt";
-	if (xml.NavigateToNode(root, 0))
-	{
-		m_ui_scale = xml.ReadAttribFlt(root, 0, "ui_scale", m_ui_scale);
-		m_aspect_correction = xml.ReadAttribFlt(root, 0, "aspect_correction", m_aspect_correction);
-		m_font_scale_w = xml.ReadAttribFlt(root, 0, "font_scale_w", m_font_scale_w);
-		m_font_scale_h = xml.ReadAttribFlt(root, 0, "font_scale_h", m_font_scale_h);
-		m_prompt_text_pad = xml.ReadAttribFlt(root, 0, "text_pad", m_prompt_text_pad);
-		m_prompt_fixed = xml.ReadAttribInt(root, 0, "fixed", 0) != 0;
-		m_prompt_fixed_x = xml.ReadAttribFlt(root, 0, "fixed_x", m_prompt_fixed_x);
-		m_prompt_fixed_y = xml.ReadAttribFlt(root, 0, "fixed_y", m_prompt_fixed_y);
-	}
-
-	if (xml.NavigateToNode("prompt:anchor", 0))
-	{
-		m_anchor_x = xml.ReadAttribFlt("prompt:anchor", 0, "x", m_anchor_x);
-		m_anchor_y = xml.ReadAttribFlt("prompt:anchor", 0, "y", m_anchor_y);
-	}
-
-	if (xml.NavigateToNode("prompt:drop", 0))
-	{
-		m_prompt_drop_height = xml.ReadAttribFlt("prompt:drop", 0, "height", m_prompt_drop_height);
-		if (LPCSTR tex = xml.ReadAttrib("prompt:drop", 0, "texture", nullptr))
-			m_prompt_drop_texture = tex;
-	}
-
-	if (xml.NavigateToNode("prompt:keybind", 0))
-	{
-		m_prompt_keybind_pressed_texture = nullptr;
-		m_prompt_keybind_w = xml.ReadAttribFlt("prompt:keybind", 0, "width", m_prompt_keybind_w);
-		m_prompt_keybind_h = xml.ReadAttribFlt("prompt:keybind", 0, "height", m_prompt_keybind_h);
-		if (LPCSTR tex = xml.ReadAttrib("prompt:keybind", 0, "texture", nullptr))
-			m_prompt_keybind_texture = tex;
-		if (LPCSTR tex = xml.ReadAttrib("prompt:keybind", 0, "pressed", nullptr))
-			m_prompt_keybind_pressed_texture = tex;
-		m_keybind_icon_w = xml.ReadAttribFlt("prompt:keybind", 0, "bind_icon_w", m_keybind_icon_w);
-		m_keybind_icon_h = xml.ReadAttribFlt("prompt:keybind", 0, "bind_icon_h", m_keybind_icon_h);
-	}
-
-	if (xml.NavigateToNode("prompt:item_card", 0))
-	{
-		const LPCSTR path = "prompt:item_card";
-		m_item_card_x = xml.ReadAttribFlt(path, 0, "x", m_item_card_x);
-		m_item_card_y = xml.ReadAttribFlt(path, 0, "y", m_item_card_y);
-		if (xml.NavigateToNode("prompt:item_card:drop", 0))
-		{
-			if (LPCSTR tex = xml.ReadAttrib("prompt:item_card:drop", 0, "texture", nullptr))
-				m_item_card_drop_texture = tex;
-			m_item_card_drop_w = xml.ReadAttribFlt("prompt:item_card:drop", 0, "width", m_item_card_drop_w);
-			m_item_card_drop_h = xml.ReadAttribFlt("prompt:item_card:drop", 0, "height", m_item_card_drop_h);
-		}
-		LoadItemCardMetric(xml, "prompt:item_card:weight", m_item_card_weight);
-		LoadItemCardMetric(xml, "prompt:item_card:value", m_item_card_value);
-	}
-
-	if (xml.NavigateToNode("prompt:tutorial", 0))
-	{
-		m_tutorial_x = xml.ReadAttribFlt("prompt:tutorial", 0, "x", m_tutorial_x);
-		m_tutorial_y = xml.ReadAttribFlt("prompt:tutorial", 0, "y", m_tutorial_y);
-	}
-
-	if (!xml.NavigateToNode("prompt:condition_text", 0))
-		return;
-
-	const LPCSTR path = "prompt:condition_text";
-	m_enable_item_stack_count = xml.ReadAttribInt(path, 0, "enable_stack_count", 1) != 0;
-	m_enable_item_condition = xml.ReadAttribInt(path, 0, "enable_condition", 1) != 0;
-	m_item_group_distance = xml.ReadAttribFlt(path, 0, "group_distance", m_item_group_distance);
-	m_item_condition_line_spacing = xml.ReadAttribFlt(path, 0, "line_spacing", m_item_condition_line_spacing);
-
-	const int min_r = xml.ReadAttribInt(path, 0, "color_min_r", 255);
-	const int min_g = xml.ReadAttribInt(path, 0, "color_min_g", 0);
-	const int min_b = xml.ReadAttribInt(path, 0, "color_min_b", 0);
-	const int min_a = xml.ReadAttribInt(path, 0, "color_min_a", 255);
-	const int max_r = xml.ReadAttribInt(path, 0, "color_max_r", 0);
-	const int max_g = xml.ReadAttribInt(path, 0, "color_max_g", 255);
-	const int max_b = xml.ReadAttribInt(path, 0, "color_max_b", 0);
-	const int max_a = xml.ReadAttribInt(path, 0, "color_max_a", 255);
-	m_item_condition_color_min = color_rgba(min_r, min_g, min_b, min_a);
-	m_item_condition_color_max = color_rgba(max_r, max_g, max_b, max_a);
-
-	if (xml.NavigateToNode("prompt:condition_text:drop", 0))
-	{
-		const LPCSTR drop_path = "prompt:condition_text:drop";
-		m_condition_drop_enabled = xml.ReadAttribInt(drop_path, 0, "enable", 0) != 0;
-		if (LPCSTR tex = xml.ReadAttrib(drop_path, 0, "texture", nullptr))
-			m_condition_drop_texture = tex;
-		m_condition_drop_w = xml.ReadAttribFlt(drop_path, 0, "width", m_condition_drop_w);
-		m_condition_drop_h = xml.ReadAttribFlt(drop_path, 0, "height", m_condition_drop_h);
-		m_condition_drop_pad = xml.ReadAttribFlt(drop_path, 0, "pad", m_condition_drop_pad);
-		const int dr = xml.ReadAttribInt(drop_path, 0, "r", 255);
-		const int dg = xml.ReadAttribInt(drop_path, 0, "g", 255);
-		const int db = xml.ReadAttribInt(drop_path, 0, "b", 255);
-		const int da = xml.ReadAttribInt(drop_path, 0, "a", 204);
-		m_condition_drop_color = color_rgba(dr, dg, db, da);
-	}
+	else if (g_FontManager && g_FontManager->pFontSystem)
+		out.font = g_FontManager->pFontSystem;
 }
 
 void CInteractionMarkerManager::LoadFocusSound()
@@ -2063,7 +2111,7 @@ void CInteractionMarkerManager::UpdateAnimations(CActor* actor)
 
 	if (m_focus_id != m_prev_focus_id)
 	{
-		if (m_focus_id != 0xffff && m_popin_anim_dur > 0)
+		if (m_focus_id != 0xffff && m_markers_cfg.popin_duration_ms > 0)
 		{
 			m_popin_focus_id = m_focus_id;
 			m_popin_start_time = Device.dwTimeGlobal;
@@ -2105,8 +2153,8 @@ u32 CInteractionMarkerManager::GetItemConditionColor(float condition) const
 	clamp(condition, 0.f, 1.f);
 
 	Fcolor c1, c2, result;
-	c1.set(m_item_condition_color_min);
-	c2.set(m_item_condition_color_max);
+	c1.set(m_prompt_cfg.item_condition.color_min);
+	c2.set(m_prompt_cfg.item_condition.color_max);
 	result.lerp(c1, c2, condition);
 	return result.get();
 }
@@ -2133,7 +2181,7 @@ u32 CInteractionMarkerManager::CountGroupedItemMarkers(const SInteractionMarker&
 		if (marker.screen_pos.x < 0.f || focus_pos.x < 0.f)
 			continue;
 
-		if (marker.screen_pos.distance_to(focus_pos) > m_item_group_distance)
+		if (marker.screen_pos.distance_to(focus_pos) > m_prompt_cfg.item_stack_count.group_distance)
 			continue;
 
 		CObject* obj = Level().Objects.net_Find(id);
@@ -2157,8 +2205,8 @@ LPCSTR CInteractionMarkerManager::ResolveKeyBindIcon(int dik, float& out_w, floa
 	if (it == m_dik_icons.end() || !it->second.size())
 		return nullptr;
 
-	out_w = m_keybind_icon_w;
-	out_h = m_keybind_icon_h;
+	out_w = m_prompt_cfg.main_panel.keybind.icon_width;
+	out_h = m_prompt_cfg.main_panel.keybind.icon_height;
 	return it->second.c_str();
 }
 
@@ -2194,7 +2242,7 @@ bool CInteractionMarkerManager::BuildPromptParts(CActor* actor, const SInteracti
 			xr_strcpy(out.verb, WsuiString("ui_st_wsui_pickup"));
 			if (LPCSTR name = ItemDisplayName(item))
 			{
-				if (m_enable_item_stack_count)
+				if (m_prompt_cfg.features.item_stack_count)
 				{
 					const u32 count = CountGroupedItemMarkers(marker);
 					if (count > 1)
@@ -2208,7 +2256,7 @@ bool CInteractionMarkerManager::BuildPromptParts(CActor* actor, const SInteracti
 				}
 			}
 
-			if (m_enable_item_condition && item->IsUsingCondition())
+			if (m_prompt_cfg.features.item_condition && item->IsUsingCondition())
 			{
 				out.show_condition = true;
 				out.item_condition = item->GetCondition();
@@ -2366,7 +2414,7 @@ float CInteractionMarkerManager::PromptTextWidth(CGameFont* font, LPCSTR text, f
 	if (!font || !text || !text[0])
 		return 0.f;
 
-	return (font->WidthOf(text) * m_font_scale_w) / kx;
+	return (font->WidthOf(text) * m_prompt_cfg.font_scale_w) / kx;
 }
 
 float CInteractionMarkerManager::PromptTextHeight(CGameFont* font, float ky) const
@@ -2374,7 +2422,7 @@ float CInteractionMarkerManager::PromptTextHeight(CGameFont* font, float ky) con
 	if (!font)
 		return 0.f;
 
-	return (font->CurrentHeight_() * m_font_scale_h) / ky;
+	return (font->CurrentHeight_() * m_prompt_cfg.font_scale_h) / ky;
 }
 
 namespace
@@ -2406,10 +2454,15 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 			return;
 	}
 
-	CGameFont* key_font = m_prompt_key_font ? m_prompt_key_font : g_FontManager->pFontSystem;
-	CGameFont* verb_font = m_prompt_verb_font ? m_prompt_verb_font : g_FontManager->pFontSystem;
-	CGameFont* name_font = m_prompt_name_font ? m_prompt_name_font : g_FontManager->pFontSystem;
-	CGameFont* full_font = m_prompt_full_font ? m_prompt_full_font : verb_font;
+	const auto& kb = m_prompt_cfg.main_panel.keybind;
+	const auto& at = m_prompt_cfg.main_panel.action_text;
+	const auto& bg = m_prompt_cfg.main_panel.background;
+	const auto& cond_cfg = m_prompt_cfg.item_condition;
+
+	CGameFont* key_font = kb.label.font ? kb.label.font : (g_FontManager ? g_FontManager->pFontSystem : nullptr);
+	CGameFont* verb_font = at.verb.font ? at.verb.font : (g_FontManager ? g_FontManager->pFontSystem : nullptr);
+	CGameFont* name_font = at.object_name.font ? at.object_name.font : (g_FontManager ? g_FontManager->pFontSystem : nullptr);
+	CGameFont* full_font = at.full_line.font ? at.full_line.font : verb_font;
 	if (!key_font || !verb_font || !name_font || !full_font)
 		return;
 
@@ -2435,17 +2488,17 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 		text_h = PromptTextHeight(full_font, ky);
 	}
 
-	const bool has_key = key_name && key_name[0];
+	const bool show_keybind = m_prompt_cfg.features.keybind && key_name && key_name[0];
 	const int use_dik = get_action_dik(kUSE, 0);
 	float bind_icon_w = 0.f;
 	float bind_icon_h = 0.f;
-	LPCSTR bind_icon = (use_dik > 0) ? ResolveKeyBindIcon(use_dik, bind_icon_w, bind_icon_h) : nullptr;
-	const float key_w = has_key ? (bind_icon ? bind_icon_w : m_prompt_keybind_w) * scale : 0.f;
-	const float key_h = has_key ? (bind_icon ? bind_icon_h : SquareHeight(m_prompt_keybind_w * scale)) : 0.f;
-	const float gap = has_key ? m_prompt_text_pad * scale : 0.f;
-	const float drop_w = key_w + gap + text_w + m_prompt_text_pad * 2.f * scale;
+	LPCSTR bind_icon = (show_keybind && use_dik > 0) ? ResolveKeyBindIcon(use_dik, bind_icon_w, bind_icon_h) : nullptr;
+	const float key_w = show_keybind ? (bind_icon ? bind_icon_w : kb.width) * scale : 0.f;
+	const float key_h = show_keybind ? (bind_icon ? bind_icon_h : SquareHeight(kb.width * scale)) : 0.f;
+	const float gap = show_keybind ? m_prompt_cfg.text_pad * scale : 0.f;
+	const float drop_w = key_w + gap + text_w + m_prompt_cfg.text_pad * 2.f * scale;
 	const float content_h = std::max(key_h, text_h);
-	const float drop_h = std::max(m_prompt_drop_height * scale, content_h + m_prompt_text_pad * scale);
+	const float drop_h = std::max(bg.height * scale, content_h + m_prompt_cfg.text_pad * scale);
 
 	const float drop_cx = cx;
 	const float drop_cy = center_anchor ? cy : cy + drop_h * 0.5f;
@@ -2453,11 +2506,11 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 	const float panel_left = drop_cx - drop_w * 0.5f;
 	const float panel_top = drop_cy - drop_h * 0.5f;
 
-	DrawTextureMarker(m_prompt_drop_texture, drop_cx, drop_cy, drop_w, drop_h, ColorWithAlpha(0xCCFFFFFF, alpha), false);
+	DrawTextureMarker(bg.texture, drop_cx, drop_cy, drop_w, drop_h, ColorWithAlpha(0xCCFFFFFF, alpha), false);
 
-	float cursor_x = drop_cx - drop_w * 0.5f + m_prompt_text_pad * scale;
+	float cursor_x = drop_cx - drop_w * 0.5f + m_prompt_cfg.text_pad * scale;
 
-	if (has_key)
+	if (show_keybind)
 	{
 		const float key_cx = cursor_x + key_w * 0.5f;
 		if (bind_icon)
@@ -2466,38 +2519,38 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 		}
 		else
 		{
-			const shared_str& key_tex = (m_prompt_keybind_pressed_texture.size() && IsUseKeyPressed())
-				? m_prompt_keybind_pressed_texture
-				: m_prompt_keybind_texture;
+			const shared_str& key_tex = (kb.pressed_texture.size() && IsUseKeyPressed())
+				? kb.pressed_texture
+				: kb.texture;
 			DrawTextureMarker(key_tex, key_cx, content_cy, key_w, key_h, ColorWithAlpha(0xFFFFFFFF, alpha), true);
 
-			const float font_h = key_font->CurrentHeight_() * m_font_scale_h;
+			const float font_h = key_font->CurrentHeight_() * m_prompt_cfg.font_scale_h;
 			key_font->SetAligment(CGameFont::alCenter);
-			key_font->SetColor(ColorWithAlpha(m_prompt_key_color, alpha));
-			key_font->Out((key_cx + m_key_text_x * scale) * kx,
-				content_cy * ky - font_h * 0.5f + m_key_text_y * scale, "%s", key_name);
+			key_font->SetColor(ColorWithAlpha(kb.label.color, alpha));
+			key_font->Out((key_cx + kb.label.x * scale) * kx,
+				content_cy * ky - font_h * 0.5f + kb.label.y * scale, "%s", key_name);
 			key_font->OnRender();
 		}
 		cursor_x += key_w + gap;
 	}
 
-	const float action_x = parts.split ? m_verb_text_x : m_full_text_x;
-	const float action_y = parts.split ? m_verb_text_y : m_full_text_y;
+	const float action_x = parts.split ? at.verb.x : at.full_line.x;
+	const float action_y = parts.split ? at.verb.y : at.full_line.y;
 	const float text_y = (content_cy - text_h * 0.5f + action_y * scale) * ky;
 	const float text_x = (cursor_x + action_x * scale) * kx;
 
 	if (parts.split)
 	{
 		verb_font->SetAligment(CGameFont::alLeft);
-		verb_font->SetColor(ColorWithAlpha(m_prompt_verb_color, alpha));
+		verb_font->SetColor(ColorWithAlpha(at.verb.color, alpha));
 		verb_font->Out(text_x, text_y, "%s", parts.verb);
 
-		float segment_x = text_x + verb_font->WidthOf(parts.verb) * m_font_scale_w;
+		float segment_x = text_x + verb_font->WidthOf(parts.verb) * m_prompt_cfg.font_scale_w;
 		if (parts.name[0])
 		{
-			segment_x += verb_font->WidthOf(" ") * m_font_scale_w;
+			segment_x += verb_font->WidthOf(" ") * m_prompt_cfg.font_scale_w;
 			name_font->SetAligment(CGameFont::alLeft);
-			name_font->SetColor(ColorWithAlpha(m_prompt_name_color, alpha));
+			name_font->SetColor(ColorWithAlpha(at.object_name.color, alpha));
 			name_font->Out(segment_x, text_y, "%s", parts.name);
 			name_font->OnRender();
 		}
@@ -2506,14 +2559,14 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 	else
 	{
 		full_font->SetAligment(CGameFont::alLeft);
-		full_font->SetColor(ColorWithAlpha(center_anchor ? m_prompt_full_color : m_prompt_full_color, alpha));
+		full_font->SetColor(ColorWithAlpha(at.full_line.color, alpha));
 		full_font->Out(text_x, text_y, "%s", parts.full);
 		full_font->OnRender();
 	}
 
 	if (parts.show_condition)
 	{
-		CGameFont* cond_font = m_prompt_condition_font ? m_prompt_condition_font : name_font;
+		CGameFont* cond_font = cond_cfg.label.font ? cond_cfg.label.font : name_font;
 		if (cond_font)
 		{
 			const int percent = (int)(parts.item_condition * 100.f);
@@ -2534,32 +2587,32 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 			}
 
 			const float cond_h = PromptTextHeight(cond_font, ky);
-			const float cond_ui_x = panel_left + m_condition_text_x * scale;
-			const float cond_ui_y = panel_top + drop_h + m_prompt_text_pad * scale + m_condition_text_y * scale;
+			const float cond_ui_x = panel_left + cond_cfg.x * scale;
+			const float cond_ui_y = panel_top + drop_h + m_prompt_cfg.text_pad * scale + cond_cfg.y * scale;
 			const float cond_x = cond_ui_x * kx;
 			const float cond_y = cond_ui_y * ky;
 
-			if (m_condition_drop_enabled && m_condition_drop_texture.size())
+			if (cond_cfg.background.enabled && cond_cfg.background.texture.size())
 			{
 				const float text_w_ui = PromptTextWidth(cond_font, cond_text, kx);
 				const float text_h_ui = cond_h / ky;
-				const float pad = m_condition_drop_pad * scale;
-				const float drop_w = (m_condition_drop_w > 0.f ? m_condition_drop_w : text_w_ui + pad * 2.f) * scale;
-				const float drop_h_cond = (m_condition_drop_h > 0.f ? m_condition_drop_h : text_h_ui + pad * 2.f) * scale;
-				const float drop_cx = cond_ui_x + drop_w * 0.5f;
-				const float drop_cy = cond_ui_y + drop_h_cond * 0.5f;
-				const u32 drop_color = m_condition_drop_color ? m_condition_drop_color : 0xCCFFFFFF;
-				DrawTextureMarker(m_condition_drop_texture, drop_cx, drop_cy, drop_w, drop_h_cond, ColorWithAlpha(drop_color, alpha), false);
+				const float pad = cond_cfg.background.pad * scale;
+				const float cond_drop_w = (cond_cfg.background.width > 0.f ? cond_cfg.background.width : text_w_ui + pad * 2.f) * scale;
+				const float drop_h_cond = (cond_cfg.background.height > 0.f ? cond_cfg.background.height : text_h_ui + pad * 2.f) * scale;
+				const float cond_drop_cx = cond_ui_x + cond_drop_w * 0.5f;
+				const float cond_drop_cy = cond_ui_y + drop_h_cond * 0.5f;
+				const u32 drop_color = cond_cfg.background.color ? cond_cfg.background.color : 0xCCFFFFFF;
+				DrawTextureMarker(cond_cfg.background.texture, cond_drop_cx, cond_drop_cy, cond_drop_w, drop_h_cond, ColorWithAlpha(drop_color, alpha), false);
 			}
 
 			cond_font->SetAligment(CGameFont::alLeft);
 			cond_font->SetColor(ColorWithAlpha(GetItemConditionColor(parts.item_condition), alpha));
-			cond_font->Out(cond_x, cond_y + cond_h * (m_item_condition_line_spacing - 1.f), "%s", cond_text);
+			cond_font->Out(cond_x, cond_y + cond_h * (cond_cfg.line_spacing - 1.f), "%s", cond_text);
 			cond_font->OnRender();
 		}
 	}
 
-	if (m_enable_item_card && marker && marker->cls == EWSUIClass::Item)
+	if (m_prompt_cfg.features.item_card && marker && marker->cls == EWSUIClass::Item)
 	{
 		if (CObject* object = Level().Objects.net_Find(marker->object_id))
 		{
@@ -2574,23 +2627,24 @@ void CInteractionMarkerManager::RenderItemCard(float panel_left, float panel_bot
 	if (!item)
 		return;
 
-	const bool has_weight = m_item_card_weight.icon.size() > 0;
-	const bool has_value = m_item_card_value.icon.size() > 0 && item->IsDrawCost();
+	const auto& card = m_prompt_cfg.item_card;
+	const bool has_weight = card.weight.icon.size() > 0;
+	const bool has_value = card.value.icon.size() > 0 && item->IsDrawCost();
 	if (!has_weight && !has_value)
 		return;
 
 	const float scale = UiScale();
 	const float kx = Device.TargetWidth / UI_BASE_WIDTH;
 	const float ky = Device.TargetHeight / UI_BASE_HEIGHT;
-	const float origin_x = panel_left + m_item_card_x * scale;
-	const float origin_y = panel_bottom + m_item_card_y * scale;
+	const float origin_x = panel_left + card.x * scale;
+	const float origin_y = panel_bottom + card.y * scale;
 
 	auto metric_right = [&](const SWSUIItemCardMetric& metric, LPCSTR text, CGameFont* font) -> float
 	{
 		float right = metric.x + metric.icon_x + metric.icon_w;
 		if (text && text[0] && font)
 		{
-			const float text_right = metric.text_x + (font->WidthOf(text) * m_font_scale_w) / kx;
+			const float text_right = metric.text_x + (font->WidthOf(text) * m_prompt_cfg.font_scale_w) / kx;
 			right = std::max(right, text_right);
 		}
 		return right;
@@ -2607,22 +2661,22 @@ void CInteractionMarkerManager::RenderItemCard(float panel_left, float panel_bot
 	float content_bottom = 0.f;
 	if (has_weight)
 	{
-		content_right = std::max(content_right, metric_right(m_item_card_weight, weight_str, m_item_card_weight.font));
-		content_bottom = std::max(content_bottom, m_item_card_weight.y + std::max(m_item_card_weight.icon_y + m_item_card_weight.icon_h, m_item_card_weight.text_y + 12.f));
+		content_right = std::max(content_right, metric_right(card.weight, weight_str, card.weight.font));
+		content_bottom = std::max(content_bottom, card.weight.y + std::max(card.weight.icon_y + card.weight.icon_h, card.weight.text_y + 12.f));
 	}
 	if (has_value)
 	{
-		content_right = std::max(content_right, metric_right(m_item_card_value, cost_str, m_item_card_value.font));
-		content_bottom = std::max(content_bottom, m_item_card_value.y + std::max(m_item_card_value.icon_y + m_item_card_value.icon_h, m_item_card_value.text_y + 12.f));
+		content_right = std::max(content_right, metric_right(card.value, cost_str, card.value.font));
+		content_bottom = std::max(content_bottom, card.value.y + std::max(card.value.icon_y + card.value.icon_h, card.value.text_y + 12.f));
 	}
 
-	const float drop_h = (m_item_card_drop_h > 0.f ? m_item_card_drop_h : content_bottom + 2.f) * scale;
-	const float drop_w = (m_item_card_drop_w > 0.f ? m_item_card_drop_w : content_right + 4.f) * scale;
+	const float drop_h = (card.background.height > 0.f ? card.background.height : content_bottom + 2.f) * scale;
+	const float drop_w = (card.background.width > 0.f ? card.background.width : content_right + 4.f) * scale;
 	const float drop_cx = origin_x + drop_w * 0.5f;
 	const float drop_cy = origin_y + drop_h * 0.5f;
 
-	if (m_item_card_drop_texture.size())
-		DrawTextureMarker(m_item_card_drop_texture, drop_cx, drop_cy, drop_w, drop_h, ColorWithAlpha(0xCCFFFFFF, alpha), false);
+	if (card.background.texture.size())
+		DrawTextureMarker(card.background.texture, drop_cx, drop_cy, drop_w, drop_h, ColorWithAlpha(0xCCFFFFFF, alpha), false);
 
 	auto draw_metric = [&](const SWSUIItemCardMetric& metric, LPCSTR text)
 	{
@@ -2649,9 +2703,9 @@ void CInteractionMarkerManager::RenderItemCard(float panel_left, float panel_bot
 	};
 
 	if (has_weight)
-		draw_metric(m_item_card_weight, weight_str);
+		draw_metric(card.weight, weight_str);
 	if (has_value)
-		draw_metric(m_item_card_value, cost_str);
+		draw_metric(card.value, cost_str);
 }
 
 void CInteractionMarkerManager::RenderPrompt(CActor* actor) const
@@ -2674,16 +2728,16 @@ void CInteractionMarkerManager::RenderPrompt(CActor* actor) const
 	const float alpha = m_prompt_alpha;
 	const float scale = UiScale();
 
-	if (m_prompt_fixed)
+	if (m_prompt_cfg.features.fixed_screen)
 	{
-		RenderPromptBubble(m_prompt_fixed_x * scale, m_prompt_fixed_y * scale, parts, key_name, alpha, true, &it->second);
+		RenderPromptBubble(m_prompt_cfg.features.fixed_x * scale, m_prompt_cfg.features.fixed_y * scale, parts, key_name, alpha, true, &it->second);
 		return;
 	}
 
-	const float marker_x = it->second.screen_pos.x + m_anchor_x * scale;
-	const float marker_y = it->second.screen_pos.y + m_anchor_y * scale;
+	const float marker_x = it->second.screen_pos.x + m_prompt_cfg.anchor_x * scale;
+	const float marker_y = it->second.screen_pos.y + m_prompt_cfg.anchor_y * scale;
 	const float dot_h = SquareHeight(m_dot_size * scale);
-	const float anchor_y = marker_y + dot_h * 0.5f + m_prompt_text_pad * scale;
+	const float anchor_y = marker_y + dot_h * 0.5f + m_prompt_cfg.text_pad * scale;
 
 	RenderPromptBubble(marker_x, anchor_y, parts, key_name, alpha, false, &it->second);
 }
@@ -2708,8 +2762,8 @@ void CInteractionMarkerManager::RenderTutorialPrompt() const
 
 	const float alpha = m_tutorial_prompt_alpha;
 	const float scale = UiScale();
-	const float cx = m_tutorial_x * scale;
-	const float cy = m_tutorial_y * scale;
+	const float cx = m_prompt_cfg.tutorial_x * scale;
+	const float cy = m_prompt_cfg.tutorial_y * scale;
 
 	RenderPromptBubble(cx, cy, parts, GetKeyName(), alpha, true);
 }
@@ -2726,7 +2780,7 @@ void CInteractionMarkerManager::OnRender()
 
 	const u32 color = 0xFFFFFFFF;
 
-	if (!m_hide_dots)
+	if (!m_markers_cfg.features.hide_dots)
 	{
 		for (const auto& [id, marker] : m_markers)
 		{
