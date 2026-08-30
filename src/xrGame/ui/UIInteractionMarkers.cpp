@@ -1,5 +1,6 @@
 #include "StdAfx.h"
 #include "UIInteractionMarkers.h"
+#include "UIInteractionMarkers_internal.h"
 
 #include <algorithm>
 
@@ -9,12 +10,8 @@
 #include "../inventory_item.h"
 #include "../InventoryBox.h"
 #include "../InventoryOwner.h"
-#include "../UsableScriptObject.h"
 #include "../entity_alive.h"
-#include "../monster_community.h"
-#include "../ai/monsters/basemonster/base_monster.h"
 #include "../ai/stalker/ai_stalker.h"
-#include "../PhysicObject.h"
 #include "../ZoneCampfire.h"
 #include "../space_restrictor.h"
 #include "../AnomalyZone.h"
@@ -24,27 +21,16 @@
 #include "../alife_simulator.h"
 #include "../alife_object_registry.h"
 #include "../xrServerEntities/xrServer_Objects_ALife_Monsters.h"
-#include "../Include/xrRender/Kinematics.h"
-#include "../xrEngine/GameMtlLib.h"
 #include "../xrEngine/xr_level_controller.h"
-#include "../xrEngine/string_table.h"
-#include "../xrCore/_color.h"
 #include "../xrEngine/CameraBase.h"
 #include "../xrEngine/xr_collide_form.h"
+#include "../ScriptsSubsystems/StoryID/StoryIDManager.h"
 #include "UIGameCustom.h"
 #include "ui/UITalkWnd.h"
 #include "ui/UITradeWnd.h"
 #include "ui/UIPdaWnd.h"
 #include "ui/UIActorMenu.h"
 #include "ui/UIInventoryWnd.h"
-#include "../../xrUI/UIXmlInit.h"
-#include "../../xrUI/UITextureMaster.h"
-#include "../../xrUI/UIVectorBinding.h"
-#include "../../xrUI/Widgets/UIStaticItem.h"
-#include "../../Include/xrRender/SVGTypes.h"
-#include "../../xrUI/ui_base.h"
-#include "../../xrCore/FormatParsers/XML/xrXMLParser.h"
-#include "../ScriptsSubsystems/StoryID/StoryIDManager.h"
 #include "ui/UIGameTutorial.h"
 #include "../../xrCore/LocatorAPI_defs.h"
 #include "../../xrCore/LocatorAPI.h"
@@ -65,263 +51,6 @@ CInteractionMarkerManager::~CInteractionMarkerManager()
 
 namespace
 {
-	LPCSTR ClassSectionName(EWSUIClass cls)
-	{
-		switch (cls)
-		{
-		case EWSUIClass::Item: return "wsui_class_item";
-		case EWSUIClass::Npc: return "wsui_class_npc";
-		case EWSUIClass::Body: return "wsui_class_body";
-		case EWSUIClass::Stash: return "wsui_class_stash";
-		case EWSUIClass::Usable: return "wsui_class_usable";
-		case EWSUIClass::Door: return "wsui_class_door";
-		case EWSUIClass::Campfire: return "wsui_class_campfire";
-		case EWSUIClass::Zone: return "wsui_class_zone";
-		default: return nullptr;
-		}
-	}
-
-	LPCSTR ClassName(EWSUIClass cls)
-	{
-		switch (cls)
-		{
-		case EWSUIClass::Item: return "item";
-		case EWSUIClass::Npc: return "npc";
-		case EWSUIClass::Body: return "body";
-		case EWSUIClass::Stash: return "stash";
-		case EWSUIClass::Usable: return "usable";
-		case EWSUIClass::Door: return "door";
-		case EWSUIClass::Campfire: return "campfire";
-		case EWSUIClass::Zone: return "zone";
-		default: return "none";
-		}
-	}
-
-	static const LPCSTR g_door_bones[] = { "door_right", "door_left", "lock", "door", nullptr };
-
-	LPCSTR WsuiString(LPCSTR id)
-	{
-		return g_pStringTable->translate(id).c_str();
-	}
-
-	SWSUITextureSlot MakeRasterSlot(LPCSTR raster)
-	{
-		SWSUITextureSlot slot;
-		if (raster && raster[0])
-			slot.raster = raster;
-		return slot;
-	}
-
-	shared_str NormalizeWsuiSvgSubpath(shared_str path)
-	{
-		if (!path.size())
-			return path;
-
-		bool needs_normalize = false;
-		for (LPCSTR p = path.c_str(); *p; ++p)
-		{
-			if (*p == '/')
-			{
-				needs_normalize = true;
-				break;
-			}
-		}
-
-		if (!needs_normalize)
-			return path;
-
-		string_path normalized;
-		xr_strcpy(normalized, path.c_str());
-		for (char* p = normalized; *p; ++p)
-		{
-			if (*p == '/')
-				*p = Platform::kPreferredSeparator[0];
-		}
-		return normalized;
-	}
-
-	bool WsuiSvgFileExists(LPCSTR subpath)
-	{
-		if (!subpath || !subpath[0])
-			return false;
-
-		string_path normalized_subpath;
-		xr_strcpy(normalized_subpath, subpath);
-		for (char* p = normalized_subpath; *p; ++p)
-		{
-			if (*p == '/')
-				*p = Platform::kPreferredSeparator[0];
-		}
-
-		char buf[256];
-		xr_sprintf(buf, sizeof(buf), "ui%s%s", Platform::kPreferredSeparator, normalized_subpath);
-		string_path fn;
-		FS.update_path(fn, _game_textures_, buf);
-
-		IReader* reader = FS.r_open(fn);
-		if (!reader)
-			return false;
-
-		FS.r_close(reader);
-		return true;
-	}
-
-	LPCSTR ItemDisplayName(CInventoryItem* item)
-	{
-		if (!item)
-			return nullptr;
-
-		if (LPCSTR name = item->NameItem())
-		{
-			if (name[0])
-				return name;
-		}
-
-		if (LPCSTR short_name = item->NameShort())
-		{
-			if (short_name[0])
-				return short_name;
-		}
-
-		return nullptr;
-	}
-
-	bool CorpseHasInventoryItems(CInventoryOwner* owner)
-	{
-		return owner && owner->inventory().dwfGetObjectCount() > 0;
-	}
-
-	bool MonstersInventoryEnabled()
-	{
-		return EngineExternal()[EEngineExternalGame::EnableMonstersInventory];
-	}
-
-	bool ShouldShowMonsterCorpse(CGameObject* obj)
-	{
-		if (!obj || !MonstersInventoryEnabled())
-			return false;
-
-		CInventoryOwner* owner = obj->cast_inventory_owner();
-		if (!owner || owner->deadbody_closed_status())
-			return false;
-
-		return CorpseHasInventoryItems(owner);
-	}
-
-	LPCSTR TryWsuiCreatureString(LPCSTR section)
-	{
-		if (!section || !section[0])
-			return nullptr;
-
-		string64 key;
-		xr_sprintf(key, "ui_st_wsui_creature_%s", section);
-		LPCSTR translated = WsuiString(key);
-		if (translated && translated[0] && xr_strcmp(translated, key) != 0)
-			return translated;
-
-		return nullptr;
-	}
-
-	static const LPCSTR g_creature_rank_suffixes[] = { "_strong", "_weak", "_normal", nullptr };
-
-	LPCSTR ResolveCreatureSpeciesName(LPCSTR section)
-	{
-		if (LPCSTR name = TryWsuiCreatureString(section))
-			return name;
-
-		if (!section || !section[0])
-			return nullptr;
-
-		for (u32 i = 0; g_creature_rank_suffixes[i]; ++i)
-		{
-			LPCSTR suffix = g_creature_rank_suffixes[i];
-			const size_t slen = xr_strlen(section);
-			const size_t xlen = xr_strlen(suffix);
-			if (slen > xlen && !xr_strcmp(section + slen - xlen, suffix))
-			{
-				string64 base;
-				xr_strcpy(base, sizeof(base), section);
-				base[slen - xlen] = 0;
-				if (LPCSTR name = TryWsuiCreatureString(base))
-					return name;
-			}
-		}
-
-		return nullptr;
-	}
-
-	// Имя трупа: персонаж, локализованная секция, community, вид мутанта
-	LPCSTR BodyDisplayName(CGameObject* obj)
-	{
-		if (!obj)
-			return nullptr;
-
-		if (CInventoryOwner* owner = obj->cast_inventory_owner())
-		{
-			LPCSTR owner_name = owner->Name();
-			LPCSTR spawn_name = obj->cName().c_str();
-			if (owner_name && owner_name[0] && xr_strcmp(owner_name, spawn_name) != 0)
-				return owner_name;
-		}
-
-		LPCSTR section = obj->cNameSect().c_str();
-		if (!section || !section[0])
-			return nullptr;
-
-		if (LPCSTR translated = WsuiString(section))
-		{
-			if (xr_strcmp(translated, section) != 0)
-				return translated;
-		}
-
-		if (pSettings->line_exist(section, "inv_name"))
-		{
-			LPCSTR inv_id = pSettings->r_string(section, "inv_name");
-			if (LPCSTR translated = WsuiString(inv_id))
-				return translated;
-		}
-
-		if (pSettings->line_exist(section, "community"))
-		{
-			LPCSTR comm = pSettings->r_string(section, "community");
-			if (LPCSTR translated = WsuiString(comm))
-			{
-				if (xr_strcmp(translated, comm) != 0)
-					return translated;
-			}
-		}
-
-		if (LPCSTR species = ResolveCreatureSpeciesName(section))
-			return species;
-
-		if (CEntityAlive* alive = obj->cast_entity_alive())
-		{
-			if (alive->monster_community && alive->monster_community->id().size())
-			{
-				LPCSTR comm = alive->monster_community->id().c_str();
-				if (LPCSTR translated = WsuiString(comm))
-				{
-					if (xr_strcmp(translated, comm) != 0)
-						return translated;
-				}
-			}
-		}
-
-		return nullptr;
-	}
-
-	Fvector ParseVector3(LPCSTR value)
-	{
-		Fvector result = {};
-		if (!value || !value[0])
-			return result;
-
-		int count = sscanf(value, "%f,%f,%f", &result.x, &result.y, &result.z);
-		if (count < 3)
-			result.set(0.f, 0.f, 0.f);
-		return result;
-	}
-
 	float EaseOutElastic(float t)
 	{
 		if (t <= 0.f)
@@ -331,6 +60,36 @@ namespace
 
 		const float p = 0.3f;
 		return powf(2.f, -10.f * t) * sinf((t - p / 4.f) * (2.f * PI) / p) + 1.f;
+	}
+
+	bool IsQuestSchemeActiveValue(LPCSTR active)
+	{
+		if (!active || !active[0])
+			return false;
+
+		return !strncmp(active, "ph_button", 9) ||
+			!strncmp(active, "ph_code", 7) ||
+			!strncmp(active, "ph_idle", 7);
+	}
+
+	void ExtractStoryIdFromFilename(LPCSTR filename, string64& out)
+	{
+		out[0] = 0;
+		if (!filename || !filename[0])
+			return;
+
+		const char* slash = strrchr(filename, '\\');
+		if (!slash)
+			slash = strrchr(filename, '/');
+		const char* base = slash ? slash + 1 : filename;
+
+		const char* dot = strrchr(base, '.');
+		size_t len = dot ? size_t(dot - base) : xr_strlen(base);
+		if (len >= sizeof(string64))
+			len = sizeof(string64) - 1;
+
+		strncpy_s(out, sizeof(string64), base, len);
+		out[len] = 0;
 	}
 }
 
@@ -418,20 +177,15 @@ bool CInteractionMarkerManager::ShouldSuppressTutorialUiWhenActive() const
 
 bool CInteractionMarkerManager::ShouldSuppressNpcNameAtDistance(float distance) const
 {
-	const u32 idx = static_cast<u32>(EWSUIClass::Npc);
-	if (idx >= static_cast<u32>(EWSUIClass::Count))
+	const SWSUICategoryDef* def = GetCategory("npc");
+	if (!def || !def->enabled)
 		return false;
 
-	const SWSUIClassDef& def = m_classes[idx];
-	if (!def.enabled)
-		return false;
-
-	return distance <= def.show_distance;
+	return distance <= def->show_distance;
 }
 
 void CInteractionMarkerManager::EnsureQuestSchemeIndex()
 {
-	// Ленивый индекс квестовых схем - один раз за сессию, при первом Scan
 	if (!m_enable_quest_scheme_scan || m_quest_scheme_index_built)
 		return;
 
@@ -441,7 +195,6 @@ void CInteractionMarkerManager::EnsureQuestSchemeIndex()
 
 void CInteractionMarkerManager::Load()
 {
-	// Сброс состояния перед загрузкой конфигов
 	m_enabled = false;
 	m_markers.clear();
 	m_los_rr_order.clear();
@@ -449,7 +202,7 @@ void CInteractionMarkerManager::Load()
 	m_los_rr_order_size = 0;
 	m_los_cam_valid = false;
 	m_scan_motion_valid = false;
-	m_classes_from_xml = false;
+	m_categories_from_xml = false;
 	m_dik_icons_from_xml = false;
 	m_bones_by_section.clear();
 	m_pos_adj_by_section.clear();
@@ -465,6 +218,9 @@ void CInteractionMarkerManager::Load()
 	m_usable_section_patterns.clear();
 	m_zone_name_patterns.clear();
 	m_default_icon_id = nullptr;
+	m_categories.clear();
+	m_category_priority.clear();
+	m_class_rules.clear();
 	m_quest_scheme_stories.clear();
 	m_breakable_box_visuals.clear();
 	m_bone_priority.clear();
@@ -483,9 +239,7 @@ void CInteractionMarkerManager::Load()
 	if (!pSettings->section_exist("wsui"))
 		return;
 
-	// LTX: флаги и путь к ui_xml
 	m_enabled = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enabled", false);
-
 	m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "ui_xml", nullptr);
 	if (!m_ui_xml.size())
 		m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "prompt_ui_xml", "ui_wsui.xml");
@@ -494,10 +248,9 @@ void CInteractionMarkerManager::Load()
 	m_enable_quest_scheme_scan = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_quest_scheme_scan", true);
 	LoadWsuiXml();
 	LoadFocusSound();
-	// XML: маркеры, промпт, классы, dik_icons; LTX: lookup-таблицы
 	if (!m_dik_icons_from_xml)
 		LoadDikIconsLtx();
-	if (!m_classes_from_xml)
+	if (!m_categories_from_xml)
 		LoadClassDefs();
 	LoadBonePriority();
 	LoadLookupSection("bones_by_section", false);
@@ -511,6 +264,7 @@ void CInteractionMarkerManager::Load()
 	LoadIconPatternSection("npc_section_contains", m_npc_section_patterns);
 	LoadIconPatternSection("usable_section_contains", m_usable_section_patterns);
 	LoadIconPatternSection("zone_name_contains", m_zone_name_patterns);
+	LoadClassificationRules();
 
 	if (pSettings->section_exist("breakable_box_visuals"))
 	{
@@ -520,164 +274,6 @@ void CInteractionMarkerManager::Load()
 	}
 
 	m_config_loaded = true;
-}
-
-void CInteractionMarkerManager::LoadDikIconsLtx()
-{
-	m_dik_icons.clear();
-	if (!pSettings->section_exist("wsui_dik_icons"))
-		return;
-
-	const CInifile::Sect& sect = pSettings->r_section("wsui_dik_icons");
-	for (const auto& line : sect.Data)
-	{
-		int dik = keyname_to_dik(*line.first);
-		if (!dik)
-			dik = atoi(*line.first);
-		if (dik > 0)
-		{
-			SWSUITextureSlot slot = ResolveIcon(line.second);
-			if (!slot.HasDrawable())
-				slot.raster = line.second;
-			m_dik_icons[dik] = slot;
-		}
-	}
-}
-
-void CInteractionMarkerManager::LoadClassDefs()
-{
-	if (m_classes_from_xml)
-		return;
-
-	const float default_distance = m_markers_cfg.scan.radius > 0.f ? m_markers_cfg.scan.radius : 5.f;
-	for (u32 i = 1; i < static_cast<u32>(EWSUIClass::Count); ++i)
-	{
-		const EWSUIClass cls = static_cast<EWSUIClass>(i);
-		LPCSTR section = ClassSectionName(cls);
-		SWSUIClassDef& def = m_classes[i];
-
-		def.enabled = true;
-		def.texture = {};
-		def.active_texture = {};
-		def.bone = nullptr;
-		def.show_distance = default_distance;
-
-		if (!section || !pSettings->section_exist(section))
-			continue;
-
-		def.enabled = READ_IF_EXISTS(pSettings, r_bool, section, "enabled", true);
-		def.texture.raster = READ_IF_EXISTS(pSettings, r_string, section, "texture", nullptr);
-		def.texture.svg = NormalizeWsuiSvgSubpath(READ_IF_EXISTS(pSettings, r_string, section, "svg", nullptr));
-		{
-			SWSUITextureSlot resolved = ResolveIcon(def.texture.raster);
-			if (resolved.HasDrawable())
-				def.texture = resolved;
-		}
-		def.active_texture.raster = READ_IF_EXISTS(pSettings, r_string, section, "active_texture", def.texture.raster);
-		def.active_texture.svg = NormalizeWsuiSvgSubpath(READ_IF_EXISTS(pSettings, r_string, section, "active_svg", nullptr));
-		{
-			SWSUITextureSlot resolved = ResolveIcon(def.active_texture.raster);
-			if (resolved.HasDrawable())
-				def.active_texture = resolved;
-		}
-		if (!def.active_texture.svg.size() && def.texture.svg.size())
-			def.active_texture.svg = def.texture.svg;
-		def.bone = READ_IF_EXISTS(pSettings, r_string, section, "bone", nullptr);
-		def.show_distance = READ_IF_EXISTS(pSettings, r_float, section, "show_distance", default_distance);
-	}
-}
-
-void CInteractionMarkerManager::LoadFloatLookupSection(LPCSTR section_name, xr_map<shared_str, float>& out)
-{
-	out.clear();
-	if (!section_name || !pSettings->section_exist(section_name))
-		return;
-
-	const CInifile::Sect& sect = pSettings->r_section(section_name);
-	for (const auto& line : sect.Data)
-		out[line.first] = (float)atof(*line.second);
-}
-
-void CInteractionMarkerManager::LoadTextureLookupSection(LPCSTR section_name, xr_map<shared_str, shared_str>& out)
-{
-	out.clear();
-	if (!section_name || !pSettings->section_exist(section_name))
-		return;
-
-	const CInifile::Sect& sect = pSettings->r_section(section_name);
-	for (const auto& line : sect.Data)
-		out[line.first] = line.second;
-}
-
-void CInteractionMarkerManager::LoadLookupSection(LPCSTR section_name, bool is_pos_adj)
-{
-	if (!section_name || !pSettings->section_exist(section_name))
-		return;
-
-	const CInifile::Sect& sect = pSettings->r_section(section_name);
-	for (const auto& line : sect.Data)
-	{
-		if (is_pos_adj)
-			m_pos_adj_by_section[line.first] = ParseVector3(*line.second);
-		else
-			m_bones_by_section[line.first] = line.second;
-	}
-}
-
-void CInteractionMarkerManager::LoadBonePriority()
-{
-	m_bone_priority.clear();
-
-	static const LPCSTR default_bones[] = {
-		"wpn_body", "bip01_spine1", "spine_1", "door_right", "door_left",
-		"lock", "door", "link", "joint", "joint1", "patch", "bone01", nullptr
-	};
-
-	if (pSettings->section_exist("bones"))
-	{
-		const CInifile::Sect& sect = pSettings->r_section("bones");
-		for (const auto& line : sect.Data)
-			m_bone_priority.push_back(line.first);
-	}
-
-	if (m_bone_priority.empty())
-	{
-		for (u32 i = 0; default_bones[i]; ++i)
-			m_bone_priority.emplace_back(default_bones[i]);
-	}
-}
-
-namespace
-{
-	bool IsQuestSchemeActiveValue(LPCSTR active)
-	{
-		if (!active || !active[0])
-			return false;
-
-		return !strncmp(active, "ph_button", 9) ||
-			!strncmp(active, "ph_code", 7) ||
-			!strncmp(active, "ph_idle", 7);
-	}
-
-	void ExtractStoryIdFromFilename(LPCSTR filename, string64& out)
-	{
-		out[0] = 0;
-		if (!filename || !filename[0])
-			return;
-
-		const char* slash = strrchr(filename, '\\');
-		if (!slash)
-			slash = strrchr(filename, '/');
-		const char* base = slash ? slash + 1 : filename;
-
-		const char* dot = strrchr(base, '.');
-		size_t len = dot ? size_t(dot - base) : xr_strlen(base);
-		if (len >= sizeof(string64))
-			len = sizeof(string64) - 1;
-
-		strncpy_s(out, sizeof(string64), base, len);
-		out[len] = 0;
-	}
 }
 
 void CInteractionMarkerManager::CollectQuestSchemesInDir(LPCSTR dir_path)
@@ -915,494 +511,9 @@ bool CInteractionMarkerManager::HasValidBone(CGameObject* obj, LPCSTR bone_name)
 	return false;
 }
 
-LPCSTR CInteractionMarkerManager::ResolveBoneName(CGameObject* obj, EWSUIClass cls, const SWSUIClassDef& def) const
-{
-	if (!obj)
-		return nullptr;
-
-	// Предметы, костры, зоны - центр объекта надежнее костей
-	if (cls == EWSUIClass::Item || cls == EWSUIClass::Campfire || cls == EWSUIClass::Zone)
-		return nullptr;
-
-	shared_str section = obj->cNameSect();
-	auto bone_it = m_bones_by_section.find(section);
-	if (bone_it != m_bones_by_section.end())
-	{
-		if (HasValidBone(obj, bone_it->second.c_str()))
-			return bone_it->second.c_str();
-	}
-
-	if (def.bone.size() && HasValidBone(obj, def.bone.c_str()))
-		return def.bone.c_str();
-
-	if (IKinematics* kinematics = PKinematics(obj->Visual()))
-	{
-		for (const shared_str& bone : m_bone_priority)
-		{
-			if (kinematics->LL_BoneID(bone.c_str()) != BI_NONE)
-				return bone.c_str();
-		}
-	}
-
-	return nullptr;
-}
-
-bool CInteractionMarkerManager::IsDoorObject(CGameObject* obj) const
-{
-	if (!obj)
-		return false;
-
-	if (CPhysicObject* physic = obj->cast_physics_object())
-	{
-		Fvector closed, open;
-		if (physic->get_door_vectors(closed, open))
-			return true;
-	}
-
-	if (IKinematics* kinematics = PKinematics(obj->Visual()))
-	{
-		for (u32 i = 0; g_door_bones[i]; ++i)
-		{
-			if (kinematics->LL_BoneID(g_door_bones[i]) != BI_NONE)
-				return true;
-		}
-	}
-
-	return false;
-}
-
-bool CInteractionMarkerManager::HasUsableTip(CGameObject* obj) const
-{
-	if (!obj)
-		return false;
-
-	if (CUsableScriptObject* usable = obj->cast_usable_script_object())
-		return usable->tip_text() && usable->tip_text()[0];
-
-	return false;
-}
-
-bool CInteractionMarkerManager::IsKnownZone(CGameObject* obj) const
-{
-	if (!obj)
-		return false;
-
-	if (!obj->cast_restrictor())
-		return false;
-
-	shared_str name = obj->cName();
-	if (m_zone_textures_by_name.find(name) != m_zone_textures_by_name.end())
-		return true;
-	if (m_zone_prompts_by_name.find(name) != m_zone_prompts_by_name.end())
-		return true;
-
-	if (!xr_strcmp(obj->cNameSect(), "camp_zone"))
-		return true;
-
-	LPCSTR name_cstr = name.c_str();
-	if (name_cstr && strstr(name_cstr, "_sr_sleep"))
-		return true;
-
-	return false;
-}
-
-LPCSTR CInteractionMarkerManager::ResolveZonePrompt(CGameObject* obj) const
-{
-	if (!obj)
-		return nullptr;
-
-	auto it = m_zone_prompts_by_name.find(obj->cName());
-	if (it != m_zone_prompts_by_name.end())
-		return it->second.c_str();
-
-	if (!xr_strcmp(obj->cNameSect(), "camp_zone") || strstr(obj->cName().c_str(), "_sr_sleep"))
-		return "sleep_zone_tip";
-
-	return nullptr;
-}
-
-LPCSTR CInteractionMarkerManager::ResolveDoorBone(CGameObject* obj) const
-{
-	if (!obj)
-		return "nil";
-
-	if (IKinematics* kinematics = PKinematics(obj->Visual()))
-	{
-		for (u32 i = 0; g_door_bones[i]; ++i)
-		{
-			if (kinematics->LL_BoneID(g_door_bones[i]) != BI_NONE)
-				return g_door_bones[i];
-		}
-	}
-
-	return "nil";
-}
-
-float CInteractionMarkerManager::GetDoorVisualYOffset(CGameObject* obj) const
-{
-	if (!obj)
-		return 0.25f;
-
-	auto it = m_door_visuals_y.find(obj->cNameVisual());
-	if (it != m_door_visuals_y.end())
-		return it->second;
-
-	return 0.25f;
-}
-
-void CInteractionMarkerManager::LoadIconPatternSection(LPCSTR section_name, xr_map<shared_str, shared_str>& out)
-{
-	LoadTextureLookupSection(section_name, out);
-}
-
-SWSUITextureSlot CInteractionMarkerManager::ResolveIcon(shared_str icon_id) const
-{
-	if (!icon_id.size())
-		return {};
-
-	const auto it = m_icon_registry.find(icon_id);
-	if (it != m_icon_registry.end())
-		return it->second;
-
-	// Legacy configs used full texture ids (ui_wsui_*), not short icon ids.
-	if (strstr(icon_id.c_str(), "ui_") || CUITextureMaster::ItemExist(icon_id))
-		return MakeRasterSlot(icon_id.c_str());
-
-	return {};
-}
-
-SWSUITextureSlot CInteractionMarkerManager::ResolveIconRule(LPCSTR event) const
-{
-	if (!event || !event[0])
-		return {};
-
-	const auto it = m_icon_rules.find(event);
-	if (it == m_icon_rules.end())
-		return {};
-
-	return ResolveIcon(it->second);
-}
-
-SWSUITextureSlot CInteractionMarkerManager::MatchSectionPattern(shared_str section, const xr_map<shared_str, shared_str>& patterns) const
-{
-	if (!section.size())
-		return {};
-
-	const LPCSTR sect = section.c_str();
-	for (const auto& [pattern, icon_id] : patterns)
-	{
-		if (strstr(sect, pattern.c_str()))
-			return ResolveIcon(icon_id);
-	}
-	return {};
-}
-
-SWSUITextureSlot CInteractionMarkerManager::MatchNamePattern(shared_str name, const xr_map<shared_str, shared_str>& patterns) const
-{
-	return MatchSectionPattern(name, patterns);
-}
-
-SWSUITextureSlot CInteractionMarkerManager::ResolveActiveTexture(CGameObject* obj, EWSUIClass cls, const SWSUIClassDef& def, bool focused) const
-{
-	auto pickRule = [this](LPCSTR event) -> SWSUITextureSlot
-	{
-		SWSUITextureSlot slot = ResolveIconRule(event);
-		return slot.HasDrawable() ? slot : SWSUITextureSlot{};
-	};
-
-	if (m_markers_cfg.features.special_icons_always && obj)
-	{
-		if (cls == EWSUIClass::Item && IsExplosiveObject(obj))
-		{
-			if (SWSUITextureSlot slot = pickRule("explosive"); slot.HasDrawable())
-				return slot;
-		}
-
-		if (cls == EWSUIClass::Usable)
-		{
-			if (IsBreakableBox(obj))
-			{
-				if (SWSUITextureSlot slot = pickRule("breakable"); slot.HasDrawable())
-					return slot;
-			}
-			if (IsExplosiveObject(obj))
-			{
-				if (SWSUITextureSlot slot = pickRule("explosive"); slot.HasDrawable())
-					return slot;
-			}
-		}
-	}
-
-	if (!focused)
-		return def.texture;
-
-	if (!obj)
-		return def.active_texture.HasDrawable() ? def.active_texture : def.texture;
-
-	const u16 object_id = obj->ID();
-
-	if (m_markers_cfg.features.enable_task_icons)
-	{
-		bool is_storyline = false;
-		if (IsTaskTarget(object_id, is_storyline))
-		{
-			if (SWSUITextureSlot slot = pickRule(is_storyline ? "task_storyline" : "task_side"); slot.HasDrawable())
-				return slot;
-		}
-	}
-
-	const shared_str section = obj->cNameSect();
-
-	if (cls == EWSUIClass::Npc)
-	{
-		if (CAI_Stalker* stalker = obj->cast_stalker())
-		{
-			if (IsSquadLeaderNpc(stalker))
-			{
-				if (SWSUITextureSlot slot = pickRule("squad_leader"); slot.HasDrawable())
-					return slot;
-			}
-		}
-
-		if (const auto role_it = m_npc_roles_by_section.find(section); role_it != m_npc_roles_by_section.end())
-		{
-			if (SWSUITextureSlot slot = ResolveIcon(role_it->second); slot.HasDrawable())
-				return slot;
-		}
-
-		if (SWSUITextureSlot slot = MatchSectionPattern(section, m_npc_section_patterns); slot.HasDrawable())
-			return slot;
-	}
-	else if (cls == EWSUIClass::Body)
-	{
-		if (obj->cast_base_monster() && !obj->cast_stalker())
-		{
-			if (SWSUITextureSlot slot = pickRule("monster_corpse"); slot.HasDrawable())
-				return slot;
-		}
-	}
-	else if (cls == EWSUIClass::Item)
-	{
-		if (IsExplosiveObject(obj))
-		{
-			if (SWSUITextureSlot slot = pickRule("explosive"); slot.HasDrawable())
-				return slot;
-		}
-	}
-	else if (cls == EWSUIClass::Usable)
-	{
-		if (IsBreakableBox(obj))
-		{
-			if (SWSUITextureSlot slot = pickRule("breakable"); slot.HasDrawable())
-				return slot;
-		}
-
-		if (IsExplosiveObject(obj))
-		{
-			if (SWSUITextureSlot slot = pickRule("explosive"); slot.HasDrawable())
-				return slot;
-		}
-
-		if (IsQuestSchemeObject(obj))
-		{
-			if (SWSUITextureSlot slot = pickRule("quest_scheme_usable"); slot.HasDrawable())
-				return slot;
-		}
-
-		if (const auto tex_it = m_usable_textures_by_section.find(section); tex_it != m_usable_textures_by_section.end())
-		{
-			if (SWSUITextureSlot slot = ResolveIcon(tex_it->second); slot.HasDrawable())
-				return slot;
-		}
-
-		if (SWSUITextureSlot slot = MatchSectionPattern(section, m_usable_section_patterns); slot.HasDrawable())
-			return slot;
-	}
-	else if (cls == EWSUIClass::Zone)
-	{
-		if (const auto tex_it = m_zone_textures_by_name.find(obj->cName()); tex_it != m_zone_textures_by_name.end())
-		{
-			if (SWSUITextureSlot slot = ResolveIcon(tex_it->second); slot.HasDrawable())
-				return slot;
-		}
-
-		if (SWSUITextureSlot slot = MatchNamePattern(obj->cName(), m_zone_name_patterns); slot.HasDrawable())
-			return slot;
-
-		if (!xr_strcmp(obj->cNameSect(), "camp_zone"))
-		{
-			if (SWSUITextureSlot slot = pickRule("zone_camp"); slot.HasDrawable())
-				return slot;
-		}
-	}
-
-	return def.active_texture.HasDrawable() ? def.active_texture : def.texture;
-}
-
-EWSUIClass CInteractionMarkerManager::ClassifyObject(CGameObject* obj) const
-{
-	if (!obj || obj->getDestroy() || !obj->getVisible())
-		return EWSUIClass::None;
-
-	if (CActor* actor = obj->cast_actor())
-	{
-		if (actor == Actor())
-			return EWSUIClass::None;
-	}
-
-	if (obj->cast_inventory_box())
-		return EWSUIClass::Stash;
-
-	if (CAI_Stalker* stalker = obj->cast_stalker())
-	{
-		if (CEntityAlive* alive = stalker->cast_entity_alive())
-		{
-			if (alive->g_Alive())
-			{
-				return EWSUIClass::Npc;
-			}
-			else
-			{
-				return EWSUIClass::Body;
-			}
-		}
-	}
-
-	if (CBaseMonster* monster = obj->cast_base_monster())
-	{
-		if (CEntityAlive* alive = monster->cast_entity_alive())
-		{
-			if (!alive->g_Alive())
-			{
-				if (HasUsableTip(obj))
-					return EWSUIClass::Usable;
-				if (!ShouldShowMonsterCorpse(obj))
-					return EWSUIClass::None;
-				return EWSUIClass::Body;
-			}
-		}
-	}
-
-	if (CInventoryItem* item = obj->cast_inventory_item())
-	{
-		if (item->Useful() && item->CanTake())
-			return EWSUIClass::Item;
-	}
-
-	if (IsDoorObject(obj))
-		return EWSUIClass::Door;
-
-	if (obj->cast_zone_campfire())
-		return EWSUIClass::Campfire;
-
-	if (IsKnownZone(obj))
-		return EWSUIClass::Zone;
-
-	if (IsQuestSchemeObject(obj))
-		return EWSUIClass::Usable;
-
-	if (IsBreakableBox(obj))
-		return EWSUIClass::Usable;
-
-	if (HasUsableTip(obj))
-		return EWSUIClass::Usable;
-
-	return EWSUIClass::None;
-}
-
-bool CInteractionMarkerManager::ResolveMarkerDef(CGameObject* obj, EWSUIClass cls, SWSUIClassDef& out_def, Fvector& out_offset) const
-{
-	const u32 idx = static_cast<u32>(cls);
-	if (idx >= static_cast<u32>(EWSUIClass::Count))
-		return false;
-
-	out_def = m_classes[idx];
-	if (!out_def.enabled || !out_def.texture.HasDrawable())
-		return false;
-
-	shared_str section = obj->cNameSect();
-	auto bone_it = m_bones_by_section.find(section);
-	if (bone_it != m_bones_by_section.end())
-		out_def.bone = bone_it->second;
-
-	auto pos_it = m_pos_adj_by_section.find(section);
-	out_offset = (pos_it != m_pos_adj_by_section.end()) ? pos_it->second : Fvector().set(0.f, 0.f, 0.f);
-
-	if (cls == EWSUIClass::Door)
-	{
-		out_def.bone = ResolveDoorBone(obj);
-		out_offset.y = GetDoorVisualYOffset(obj);
-	}
-
-	return true;
-}
-
-bool CInteractionMarkerManager::GetMarkerWorldPos(CGameObject* obj, EWSUIClass cls, LPCSTR bone_name, const Fvector& offset, Fvector& out) const
-{
-	if (bone_name && bone_name[0] && xr_stricmp(bone_name, "nil") != 0)
-	{
-		if (IKinematics* kinematics = PKinematics(obj->Visual()))
-		{
-			const u16 bone_id = kinematics->LL_BoneID(bone_name);
-			if (bone_id != BI_NONE)
-			{
-				Fmatrix matrix;
-				matrix.mul_43(obj->XFORM(), kinematics->LL_GetTransform(bone_id));
-				out = matrix.c;
-				out.add(offset);
-				return true;
-			}
-		}
-	}
-
-	obj->Center(out);
-
-	if (cls == EWSUIClass::Zone || cls == EWSUIClass::Campfire)
-	{
-		Fvector to_viewer;
-		to_viewer.sub(Device.vCameraPosition, out);
-		const float dist = to_viewer.magnitude();
-		if (dist > 0.01f)
-		{
-			to_viewer.mul(1.f / dist);
-			float pull = 0.5f;
-			if (cls == EWSUIClass::Zone)
-			{
-				if (CSpaceRestrictor* restrictor = obj->cast_restrictor())
-					pull = std::min(restrictor->Radius() * 0.45f, dist * 0.85f);
-			}
-			else if (CAnomalyZone* zone = obj->cast_anomaly_zone())
-				pull = std::min(zone->Radius() * 0.45f, dist * 0.85f);
-
-			out.mad(out, to_viewer, pull);
-		}
-	}
-
-	out.add(offset);
-	return true;
-}
-
 Fvector2 CInteractionMarkerManager::WorldToScreen(const Fvector& world_pos, bool allow_offscreen) const
 {
 	return ::World2Ui(world_pos, false, allow_offscreen);
-}
-
-void CInteractionMarkerManager::RefreshMarkerClassifyCache(SInteractionMarker& marker, CGameObject* obj, EWSUIClass cls)
-{
-	marker.cls = cls;
-	if (!ResolveMarkerDef(obj, cls, marker.cached_def, marker.cached_offset))
-	{
-		marker.classify_valid = false;
-		return;
-	}
-
-	if (LPCSTR bone = ResolveBoneName(obj, cls, marker.cached_def))
-		marker.cached_bone = bone;
-	else
-		marker.cached_bone = nullptr;
-
-	marker.classify_valid = true;
-	marker.los_stale = true;
 }
 
 void CInteractionMarkerManager::RebuildLosRoundRobinOrder()
@@ -1475,11 +586,11 @@ void CInteractionMarkerManager::Scan(CActor* actor)
 			continue;
 
 		const float distance = origin.distance_to(game_object->Position());
-		const EWSUIClass cls = ClassifyObject(game_object);
-		if (cls == EWSUIClass::None)
+		const shared_str category_id = EvaluateCategory(game_object);
+		if (!category_id.size())
 			continue;
 
-		if (cls == EWSUIClass::Npc && m_hide_mute_stalkers)
+		if (WSUIInternal::WsuiCategoryEq(category_id, "npc") && m_hide_mute_stalkers)
 		{
 			if (CInventoryOwner* owner = game_object->cast_inventory_owner())
 			{
@@ -1488,9 +599,9 @@ void CInteractionMarkerManager::Scan(CActor* actor)
 			}
 		}
 
-		SWSUIClassDef def;
+		SWSUICategoryDef def;
 		Fvector offset;
-		if (!ResolveMarkerDef(game_object, cls, def, offset))
+		if (!ResolveMarkerDef(game_object, category_id, def, offset))
 			continue;
 
 		if (distance > def.show_distance)
@@ -1502,7 +613,7 @@ void CInteractionMarkerManager::Scan(CActor* actor)
 		const bool is_new = m_markers.find(id) == m_markers.end();
 		SInteractionMarker& marker = m_markers[id];
 		marker.object_id = id;
-		RefreshMarkerClassifyCache(marker, game_object, cls);
+		RefreshMarkerClassifyCache(marker, game_object, category_id);
 		if (!marker.classify_valid)
 		{
 			m_markers.erase(id);
@@ -1543,7 +654,9 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 	if (m_markers_cfg.features.wheel_cycle_pickups && m_wheel_focus_id != 0xffff)
 	{
 		auto wheel_it = m_markers.find(m_wheel_focus_id);
-		if (wheel_it != m_markers.end() && wheel_it->second.cls == EWSUIClass::Item)
+		if (wheel_it != m_markers.end() &&
+			(WSUIInternal::WsuiCategoryEq(wheel_it->second.category_id, "item") ||
+				CategoryHasFeature(wheel_it->second.category_id, EWSUICategoryFeature::WheelCycle)))
 			m_focus_id = m_wheel_focus_id;
 		else
 			m_wheel_focus_id = 0xffff;
@@ -1602,7 +715,7 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 		marker.reachable = false;
 		marker.distance = 0.f;
 
-		if (!marker.classify_valid || marker.cls == EWSUIClass::None)
+		if (!marker.classify_valid || !marker.category_id.size())
 			continue;
 
 		CObject* object = Level().Objects.net_Find(id);
@@ -1610,12 +723,11 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 		if (!game_object)
 			continue;
 
-		const EWSUIClass cls = marker.cls;
-		SWSUIClassDef def = marker.cached_def;
+		SWSUICategoryDef def = marker.cached_def;
 		Fvector offset = marker.cached_offset;
 		LPCSTR bone_name = marker.cached_bone.size() ? marker.cached_bone.c_str() : nullptr;
 
-		if (cls == EWSUIClass::Door)
+		if (WSUIInternal::WsuiCategoryEq(def.pos_mode, "door"))
 		{
 			def.bone = ResolveDoorBone(game_object);
 			offset.y = GetDoorVisualYOffset(game_object);
@@ -1624,7 +736,7 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 		}
 
 		Fvector world_pos;
-		if (!GetMarkerWorldPos(game_object, cls, bone_name, offset, world_pos))
+		if (!GetMarkerWorldPos(game_object, marker.category_id, def, bone_name, offset, world_pos))
 			continue;
 
 		const float distance = actor->Position().distance_to(world_pos);
@@ -1634,7 +746,7 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 
 		const bool is_focus = id == m_focus_id;
 		bool inside_volume = false;
-		if (cls == EWSUIClass::Zone)
+		if (WSUIInternal::WsuiCategoryEq(marker.category_id, "zone"))
 		{
 			if (CSpaceRestrictor* restrictor = game_object->cast_restrictor())
 			{
@@ -1644,7 +756,7 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 				inside_volume = restrictor->inside(probe);
 			}
 		}
-		else if (cls == EWSUIClass::Campfire)
+		else if (WSUIInternal::WsuiCategoryEq(marker.category_id, "campfire"))
 		{
 			if (CAnomalyZone* zone = game_object->cast_anomaly_zone())
 				inside_volume = actor->Position().distance_to(zone->Position()) <= zone->Radius();
@@ -1755,17 +867,7 @@ float CInteractionMarkerManager::GetMarkerSortScore(u16 id, const SInteractionMa
 	if (id == m_focus_id)
 		score += m_markers_cfg.marker_priority.focus;
 
-	switch (marker.cls)
-	{
-	case EWSUIClass::Npc: score += m_markers_cfg.marker_priority.npc; break;
-	case EWSUIClass::Stash: score += m_markers_cfg.marker_priority.stash; break;
-	case EWSUIClass::Usable: score += m_markers_cfg.marker_priority.usable; break;
-	case EWSUIClass::Door: score += m_markers_cfg.marker_priority.door; break;
-	case EWSUIClass::Item: score += m_markers_cfg.marker_priority.item; break;
-	case EWSUIClass::Body: score += m_markers_cfg.marker_priority.body; break;
-	default: break;
-	}
-
+	score += GetCategoryPriorityScore(marker.category_id);
 	return score;
 }
 
@@ -1897,29 +999,12 @@ bool CInteractionMarkerManager::HasLineOfSight(CActor* actor, CGameObject* obj, 
 				data.blocked = true;
 				return false;
 			}
-
-			data.blocked = true;
-			return false;
 		}
 
-		CDB::TRI& tri = Level().ObjectSpace.GetStaticTris()[result.element];
-		if (GMLib.GetMaterialByIdx(tri.material)->Flags.is(SGameMtl::flPassable))
-			return true;
-
-		data.blocked = true;
-		return false;
-	}, &los_data, nullptr, obj);
-
-	if (!los_data.blocked)
 		return true;
+	}, &los_data, nullptr, los_data.actor_obj);
 
-	for (const collide::rq_result& result : ray_results.r_results())
-	{
-		if (result.O == obj)
-			return true;
-	}
-
-	return false;
+	return !los_data.blocked;
 }
 
 float CInteractionMarkerManager::SquareHeight(float width_ui) const
@@ -1987,7 +1072,7 @@ void CInteractionMarkerManager::OnMouseWheel(int direction)
 
 	for (const auto& [id, marker] : m_markers)
 	{
-		if (marker.cls != EWSUIClass::Item || !marker.visible || !marker.reachable)
+		if (!WSUIInternal::WsuiCategoryEq(marker.category_id, "item") || !marker.visible || !marker.reachable)
 			continue;
 		items.emplace_back(marker.distance, id);
 	}
@@ -2102,12 +1187,6 @@ void CInteractionMarkerManager::Update()
 	}
 }
 
-u32 CInteractionMarkerManager::ColorWithAlpha(u32 color, float alpha) const
-{
-	const u32 a = u32(clampr(alpha, 0.f, 1.f) * 255.f);
-	return (color & 0x00ffffff) | (a << 24);
-}
-
 bool CInteractionMarkerManager::WantsPromptVisible(CActor* actor) const
 {
 	if (!actor || m_focus_id == 0xffff)
@@ -2121,7 +1200,10 @@ bool CInteractionMarkerManager::WantsPromptVisible(CActor* actor) const
 	if (!marker.visible || !marker.reachable || marker.distance > m_markers_cfg.scan.prompt_distance)
 		return false;
 
-	if (m_suppress_tutorial_ui && (marker.cls == EWSUIClass::Zone || marker.cls == EWSUIClass::Campfire))
+	if (m_suppress_tutorial_ui &&
+		(CategoryHasFeature(marker.category_id, EWSUICategoryFeature::SuppressTutorial) ||
+			WSUIInternal::WsuiCategoryEq(marker.category_id, "zone") ||
+			WSUIInternal::WsuiCategoryEq(marker.category_id, "campfire")))
 	{
 		if (LPCSTR tutorial_name = GetActiveTutorialName())
 		{
@@ -2186,725 +1268,6 @@ float CInteractionMarkerManager::GetFocusPopinScale() const
 	return min_scale + (1.f - min_scale) * EaseOutElastic(t);
 }
 
-void CInteractionMarkerManager::LoadWsuiXml()
-{
-	InvalidateSvgCache();
-	m_markers_cfg = {};
-	m_prompt_cfg = {};
-
-	if (!m_ui_xml.size())
-		return;
-
-	CUIXml xml;
-	if (!xml.Load(CONFIG_PATH, UI_PATH, m_ui_xml.c_str()))
-		return;
-
-	LoadWsuiMarkers(xml);
-	LoadWsuiPrompt(xml);
-	PrecacheAllSvgs();
-}
-
-void CInteractionMarkerManager::InvalidateSvgCache()
-{
-	m_svg_cache.clear();
-	m_svg_cache_ui_scale = -1.f;
-}
-
-float CInteractionMarkerManager::GetMarkerSvgRefSize() const
-{
-	const float dot = m_markers_cfg.dot.size > 0.f ? m_markers_cfg.dot.size : 10.f;
-	const float max_scale = m_markers_cfg.distance_fade.max_scale > 0.f ? m_markers_cfg.distance_fade.max_scale : 1.4f;
-	constexpr float kPopinPeak = 1.1f;
-	return dot * UiScale() * max_scale * kPopinPeak;
-}
-
-bool CInteractionMarkerManager::EnsureSvgCache(shared_str path, float ref_w, float ref_h) const
-{
-	path = NormalizeWsuiSvgSubpath(path);
-	if (!path.size())
-		return false;
-
-	ref_w = std::max(ref_w, 1.f);
-	ref_h = std::max(ref_h, 1.f);
-
-	const auto it = m_svg_cache.find(path);
-	if (it != m_svg_cache.end() && it->second.valid && it->second.ref_w >= ref_w && it->second.ref_h >= ref_h)
-		return true;
-
-	float raster_w = ref_w;
-	float raster_h = ref_h;
-	if (it != m_svg_cache.end() && it->second.valid)
-	{
-		raster_w = std::max(ref_w, it->second.ref_w);
-		raster_h = std::max(ref_h, it->second.ref_h);
-	}
-
-	if (!WsuiSvgFileExists(path.c_str()))
-		return false;
-
-	CUIStaticItem tmp;
-	SVGTintRGBA tint;
-	if (!CUITextureMaster::InitTexture(path, &tmp, raster_w, raster_h, tint))
-		return false;
-
-	SWSUISvgCacheEntry& entry = m_svg_cache[path];
-	entry.shader = tmp.GetShader();
-	entry.uv = tmp.GetTextureRect();
-	entry.ref_w = raster_w;
-	entry.ref_h = raster_h;
-	entry.valid = true;
-	return true;
-}
-
-void CInteractionMarkerManager::PrecacheSvgPath(shared_str path, float ref_w, float ref_h)
-{
-	if (!path.size())
-		return;
-	EnsureSvgCache(path, ref_w, ref_h);
-}
-
-void CInteractionMarkerManager::PrecacheAllSvgs()
-{
-	m_svg_cache.clear();
-
-	const float marker_ref_w = GetMarkerSvgRefSize();
-	const float marker_ref_h = SquareHeight(marker_ref_w);
-
-	for (const auto& [id, slot] : m_icon_registry)
-	{
-		(void)id;
-		if (slot.svg.size())
-			PrecacheSvgPath(slot.svg, marker_ref_w, marker_ref_h);
-	}
-
-	const auto& kb = m_prompt_cfg.main_panel.keybind;
-	const float key_w = kb.icon_width > 0.f ? kb.icon_width : (kb.width > 0.f ? kb.width : 64.f);
-	const float key_h = kb.icon_height > 0.f ? kb.icon_height : (kb.height > 0.f ? kb.height : 64.f);
-	if (kb.texture.svg.size())
-		PrecacheSvgPath(kb.texture.svg, key_w, key_h);
-	if (kb.pressed_texture.svg.size())
-		PrecacheSvgPath(kb.pressed_texture.svg, key_w, key_h);
-
-	const auto precache_bg = [this](const SWSUIBackground& bg)
-	{
-		if (!bg.texture.svg.size())
-			return;
-		const float w = bg.width > 0.f ? bg.width : 64.f;
-		const float h = bg.height > 0.f ? bg.height : 64.f;
-		PrecacheSvgPath(bg.texture.svg, w, h);
-	};
-
-	precache_bg(m_prompt_cfg.main_panel.background);
-	precache_bg(m_prompt_cfg.item_condition.background);
-	precache_bg(m_prompt_cfg.item_card.background);
-
-	const auto precache_metric = [this](const SWSUIItemCardMetric& metric)
-	{
-		if (!metric.icon.svg.size())
-			return;
-		const float w = metric.icon_w > 0.f ? metric.icon_w : 32.f;
-		const float h = metric.icon_h > 0.f ? metric.icon_h : 32.f;
-		PrecacheSvgPath(metric.icon.svg, w, h);
-	};
-
-	precache_metric(m_prompt_cfg.item_card.weight);
-	precache_metric(m_prompt_cfg.item_card.value);
-
-	m_svg_cache_ui_scale = UiScale();
-}
-
-void CInteractionMarkerManager::LoadWsuiMarkers(CUIXml& xml)
-{
-	LoadMarkersScan(xml);
-	LoadMarkersDot(xml);
-	LoadMarkersLosCache(xml);
-	LoadMarkersFeatures(xml);
-	LoadMarkersDistanceFade(xml);
-	LoadMarkersPriority(xml);
-	LoadMarkersPopinAnimation(xml);
-	LoadMarkerIcons(xml);
-	LoadMarkersClasses(xml);
-	LoadMarkersDikIcons(xml);
-}
-
-void CInteractionMarkerManager::LoadMarkerIcons(CUIXml& xml)
-{
-	m_icon_registry.clear();
-	m_icon_rules.clear();
-	m_default_icon_id = "intdot";
-
-	const LPCSTR root = "wsui_markers:marker_icons";
-	XML_NODE* icons_node = xml.NavigateToNode(root, 0);
-	if (!icons_node)
-		return;
-
-	if (LPCSTR def_icon = xml.ReadAttrib(icons_node, "default", nullptr))
-	{
-		if (def_icon[0])
-			m_default_icon_id = def_icon;
-	}
-
-	const int count = xml.GetNodesNum(icons_node, "icon");
-	for (int i = 0; i < count; ++i)
-	{
-		LPCSTR id = xml.ReadAttrib(icons_node, "icon", i, "id", nullptr);
-		if (!id || !id[0])
-			continue;
-
-		SWSUITextureSlot slot;
-		if (LPCSTR tex = xml.ReadAttrib(icons_node, "icon", i, "texture", nullptr))
-		{
-			if (tex[0])
-				slot.raster = tex;
-		}
-
-		XML_NODE* icon_node = xml.NavigateToNode(icons_node, "icon", i);
-		if (icon_node)
-		{
-			if (LPCSTR val = xml.Read(icon_node, "svg", 0, nullptr))
-			{
-				if (val[0])
-					slot.svg = NormalizeWsuiSvgSubpath(val);
-			}
-		}
-
-		if (!slot.svg.size())
-		{
-			if (LPCSTR attr = xml.ReadAttrib(icons_node, "icon", i, "svg", nullptr))
-			{
-				if (attr[0])
-					slot.svg = NormalizeWsuiSvgSubpath(attr);
-			}
-		}
-
-		if (slot.HasDrawable())
-			m_icon_registry[id] = slot;
-	}
-
-	LoadMarkerIconRules(xml);
-}
-
-void CInteractionMarkerManager::LoadMarkerIconRules(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_markers:marker_icon_rules";
-	XML_NODE* rules_node = xml.NavigateToNode(path, 0);
-	if (!rules_node)
-		return;
-
-	const int count = xml.GetNodesNum(rules_node, "rule");
-	for (int i = 0; i < count; ++i)
-	{
-		LPCSTR event = xml.ReadAttrib(rules_node, "rule", i, "event", nullptr);
-		LPCSTR icon = xml.ReadAttrib(rules_node, "rule", i, "icon", nullptr);
-		if (event && event[0] && icon && icon[0])
-			m_icon_rules[event] = icon;
-	}
-}
-
-void CInteractionMarkerManager::LoadMarkersScan(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_markers:scan";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	auto& scan = m_markers_cfg.scan;
-	scan.radius = xml.ReadAttribFlt(path, 0, "radius", 0.f);
-	scan.interval_ms = xml.ReadAttribInt(path, 0, "interval_ms", 0);
-	scan.max_markers = xml.ReadAttribInt(path, 0, "max_markers", 0);
-	scan.prompt_distance = xml.ReadAttribFlt(path, 0, "prompt_distance", 0.f);
-	scan.adaptive = xml.ReadAttribInt(path, 0, "adaptive", 0) != 0;
-	scan.idle_interval_ms = xml.ReadAttribInt(path, 0, "idle_interval_ms", 0);
-	scan.actor_pos_eps = xml.ReadAttribFlt(path, 0, "actor_pos_eps", 0.f);
-	scan.camera_dir_eps = xml.ReadAttribFlt(path, 0, "camera_dir_eps", 0.f);
-}
-
-void CInteractionMarkerManager::LoadMarkersDot(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_markers:dot";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	m_markers_cfg.dot.size = xml.ReadAttribFlt(path, 0, "size", 0.f);
-	m_markers_cfg.dot.lerp_speed = xml.ReadAttribFlt(path, 0, "lerp_speed", 0.f);
-}
-
-void CInteractionMarkerManager::LoadMarkersLosCache(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_markers:los_cache";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	auto& los = m_markers_cfg.los_cache;
-	los.cache_ttl_ms = xml.ReadAttribInt(path, 0, "cache_ttl_ms", 0);
-	los.checks_per_frame = xml.ReadAttribInt(path, 0, "checks_per_frame", 0);
-	los.camera_pos_eps = xml.ReadAttribFlt(path, 0, "camera_pos_eps", 0.f);
-	los.camera_dir_eps = xml.ReadAttribFlt(path, 0, "camera_dir_eps", 0.f);
-}
-
-void CInteractionMarkerManager::LoadMarkersFeatures(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_markers:features";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	auto& f = m_markers_cfg.features;
-	f.hide_dots = xml.ReadAttribInt(path, 0, "hide_dots", 0) != 0;
-	f.wheel_cycle_pickups = xml.ReadAttribInt(path, 0, "wheel_cycle_pickups", 0) != 0;
-	f.special_icons_always = xml.ReadAttribInt(path, 0, "special_icons_always", 0) != 0;
-	f.enable_task_icons = xml.ReadAttribInt(path, 0, "enable_task_icons", 0) != 0;
-	f.enable_focus_sound = xml.ReadAttribInt(path, 0, "enable_focus_sound", 0) != 0;
-}
-
-void CInteractionMarkerManager::LoadMarkersDistanceFade(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_markers:distance_fade";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	auto& cfg = m_markers_cfg.distance_fade;
-	cfg.enable_scale = xml.ReadAttribInt(path, 0, "enable_scale", 0) != 0;
-	cfg.enable_alpha = xml.ReadAttribInt(path, 0, "enable_alpha", 0) != 0;
-	cfg.min_scale = xml.ReadAttribFlt(path, 0, "min_scale", 0.f);
-	cfg.max_scale = xml.ReadAttribFlt(path, 0, "max_scale", 0.f);
-	cfg.min_alpha = xml.ReadAttribFlt(path, 0, "min_alpha", 0.f);
-}
-
-void CInteractionMarkerManager::LoadMarkersPriority(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_markers:marker_priority";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	auto& p = m_markers_cfg.marker_priority;
-	p.focus = xml.ReadAttribFlt(path, 0, "focus", 0.f);
-	p.task = xml.ReadAttribFlt(path, 0, "task", 0.f);
-	p.npc = xml.ReadAttribFlt(path, 0, "npc", 0.f);
-	p.stash = xml.ReadAttribFlt(path, 0, "stash", 0.f);
-	p.usable = xml.ReadAttribFlt(path, 0, "usable", 0.f);
-	p.door = xml.ReadAttribFlt(path, 0, "door", 0.f);
-	p.item = xml.ReadAttribFlt(path, 0, "item", 0.f);
-	p.body = xml.ReadAttribFlt(path, 0, "body", 0.f);
-}
-
-void CInteractionMarkerManager::LoadMarkersPopinAnimation(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_markers:popin_animation";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	auto& popin = m_markers_cfg.popin_animation;
-	popin.duration_ms = xml.ReadAttribInt(path, 0, "duration_ms", 0);
-	popin.min_scale = xml.ReadAttribFlt(path, 0, "min_scale", 0.f);
-}
-
-void CInteractionMarkerManager::LoadMarkersClasses(CUIXml& xml)
-{
-	if (!xml.NavigateToNode("wsui_markers:classes", 0))
-		return;
-
-	m_classes_from_xml = true;
-	const float default_distance = m_markers_cfg.scan.radius > 0.f ? m_markers_cfg.scan.radius : 5.f;
-
-	for (u32 i = 1; i < static_cast<u32>(EWSUIClass::Count); ++i)
-	{
-		const EWSUIClass cls = static_cast<EWSUIClass>(i);
-		LPCSTR class_name = ClassName(cls);
-		if (!class_name)
-			continue;
-
-		string256 node_path;
-		xr_sprintf(node_path, "wsui_markers:classes:%s", class_name);
-		if (!xml.NavigateToNode(node_path, 0))
-			continue;
-
-		SWSUIClassDef& def = m_classes[i];
-		def.enabled = xml.ReadAttribInt(node_path, 0, "enabled", 1) != 0;
-		LoadClassIconRef(xml, node_path, "texture", def.texture);
-		LoadClassIconRef(xml, node_path, "active_texture", def.active_texture);
-		if (!def.active_texture.HasDrawable() && def.texture.HasDrawable())
-			def.active_texture = def.texture;
-		if (LPCSTR bone = xml.ReadAttrib(node_path, 0, "bone", nullptr))
-			def.bone = bone;
-		def.show_distance = xml.ReadAttribFlt(node_path, 0, "show_distance", default_distance);
-	}
-}
-
-void CInteractionMarkerManager::LoadMarkersDikIcons(CUIXml& xml)
-{
-	if (!xml.NavigateToNode("wsui_markers:dik_icons", 0))
-		return;
-
-	static const LPCSTR keys[] = { "mouse1", "mouse2", "mouse3", "mouse4", "mouse5" };
-	m_dik_icons.clear();
-	m_dik_icons_from_xml = true;
-
-	for (LPCSTR key : keys)
-	{
-		string256 node_path;
-		xr_sprintf(node_path, "wsui_markers:dik_icons:%s", key);
-		if (!xml.NavigateToNode(node_path, 0))
-			continue;
-
-		SWSUITextureSlot slot;
-		LoadIconRefSlot(xml, node_path, slot, "icon");
-		if (slot.HasDrawable())
-		{
-			const int dik = keyname_to_dik(key);
-			if (dik > 0)
-				m_dik_icons[dik] = slot;
-		}
-	}
-}
-
-void CInteractionMarkerManager::LoadWsuiPrompt(CUIXml& xml)
-{
-	LoadPromptLayout(xml);
-	LoadPromptFeatures(xml);
-	LoadPromptFadeAnimation(xml);
-	LoadPromptMainPanel(xml);
-	LoadPromptItemStackCount(xml);
-	LoadPromptItemCondition(xml);
-	LoadPromptItemCard(xml);
-	LoadPromptTutorialScreen(xml);
-}
-
-void CInteractionMarkerManager::LoadPromptLayout(CUIXml& xml)
-{
-	const LPCSTR root = "wsui_prompt";
-	if (!xml.NavigateToNode(root, 0))
-		return;
-
-	m_prompt_cfg.ui_scale = xml.ReadAttribFlt(root, 0, "ui_scale", 0.f);
-	m_prompt_cfg.aspect_correction = xml.ReadAttribFlt(root, 0, "aspect_correction", 0.f);
-	m_prompt_cfg.font_scale_w = xml.ReadAttribFlt(root, 0, "font_scale_w", 0.f);
-	m_prompt_cfg.font_scale_h = xml.ReadAttribFlt(root, 0, "font_scale_h", 0.f);
-	m_prompt_cfg.text_pad = xml.ReadAttribFlt(root, 0, "text_pad", 0.f);
-	CUIXmlInit::ReadShadowsNode(xml, root, 0, m_prompt_cfg.default_text_shadow);
-
-	if (xml.NavigateToNode("wsui_prompt:anchor", 0))
-	{
-		m_prompt_cfg.anchor_x = xml.ReadAttribFlt("wsui_prompt:anchor", 0, "x", 0.f);
-		m_prompt_cfg.anchor_y = xml.ReadAttribFlt("wsui_prompt:anchor", 0, "y", 0.f);
-	}
-}
-
-void CInteractionMarkerManager::LoadPromptFeatures(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_prompt:features";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	auto& f = m_prompt_cfg.features;
-	f.item_stack_count = xml.ReadAttribInt(path, 0, "item_stack_count", 0) != 0;
-	f.item_condition = xml.ReadAttribInt(path, 0, "item_condition", 0) != 0;
-	f.item_card = xml.ReadAttribInt(path, 0, "item_card", 0) != 0;
-	f.keybind = xml.ReadAttribInt(path, 0, "keybind", 0) != 0;
-	f.fixed_screen = xml.ReadAttribInt(path, 0, "fixed_screen", 0) != 0;
-	f.fixed_x = xml.ReadAttribFlt(path, 0, "fixed_x", 0.f);
-	f.fixed_y = xml.ReadAttribFlt(path, 0, "fixed_y", 0.f);
-}
-
-void CInteractionMarkerManager::LoadPromptFadeAnimation(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_prompt:fade_animation";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	m_prompt_cfg.fade_animation.fade_in_ms = xml.ReadAttribInt(path, 0, "fade_in_ms", 0);
-	m_prompt_cfg.fade_animation.fade_out_ms = xml.ReadAttribInt(path, 0, "fade_out_ms", 0);
-}
-
-void CInteractionMarkerManager::LoadTextLabel(CUIXml& xml, LPCSTR path, SWSUITextLabel& out)
-{
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	out.x = xml.ReadAttribFlt(path, 0, "x", 0.f);
-	out.y = xml.ReadAttribFlt(path, 0, "y", 0.f);
-	if (LPCSTR font_name = xml.ReadAttrib(path, 0, "font", nullptr))
-		out.font_name = font_name;
-
-	u32 color = 0;
-	CGameFont* loaded_font = nullptr;
-	if (CUIXmlInit::InitFont(xml, path, 0, color, loaded_font) && loaded_font)
-	{
-		out.font = loaded_font;
-		out.color = color;
-	}
-
-	CUIXmlInit::ReadShadowsNode(xml, path, 0, out.text_shadow);
-}
-
-void CInteractionMarkerManager::LoadTextureSlot(CUIXml& xml, LPCSTR path, SWSUITextureSlot& out, LPCSTR raster_attr, LPCSTR svg_child) const
-{
-	out.raster = nullptr;
-	out.svg = nullptr;
-
-	if (LPCSTR tex = xml.ReadAttrib(path, 0, raster_attr, nullptr))
-		out.raster = tex;
-
-	if (svg_child && svg_child[0])
-	{
-		string256 svg_node;
-		xr_strconcat(svg_node, path, ":", svg_child);
-		if (xml.NavigateToNode(svg_node, 0))
-		{
-			if (LPCSTR val = xml.Read(svg_node, 0, nullptr))
-			{
-				if (val[0])
-					out.svg = val;
-			}
-		}
-	}
-
-	if (!out.svg.size() && svg_child && !xr_strcmp(svg_child, "svg"))
-	{
-		if (LPCSTR svg = CUIVectorBinding::QueryFileNameFromXml(xml, path, 0))
-			out.svg = svg;
-	}
-	else if (!out.svg.size() && svg_child && svg_child[0])
-	{
-		if (LPCSTR attr = xml.ReadAttrib(path, 0, svg_child, nullptr))
-		{
-			if (attr[0])
-				out.svg = attr;
-		}
-	}
-
-	if (out.svg.size())
-		out.svg = NormalizeWsuiSvgSubpath(out.svg);
-}
-
-void CInteractionMarkerManager::LoadIconRefSlot(CUIXml& xml, LPCSTR path, SWSUITextureSlot& out, LPCSTR icon_attr, LPCSTR raster_attr, LPCSTR svg_child) const
-{
-	out = {};
-	if (icon_attr && icon_attr[0])
-	{
-		if (LPCSTR icon_id = xml.ReadAttrib(path, 0, icon_attr, nullptr))
-		{
-			if (icon_id[0])
-			{
-				out = ResolveIcon(icon_id);
-				if (out.HasDrawable())
-					return;
-			}
-		}
-	}
-
-	LoadTextureSlot(xml, path, out, raster_attr, svg_child);
-}
-
-void CInteractionMarkerManager::LoadClassIconRef(CUIXml& xml, LPCSTR path, LPCSTR attr, SWSUITextureSlot& out) const
-{
-	out = {};
-	if (attr && attr[0])
-	{
-		if (LPCSTR icon_id = xml.ReadAttrib(path, 0, attr, nullptr))
-		{
-			if (icon_id[0])
-			{
-				out = ResolveIcon(icon_id);
-				if (out.HasDrawable())
-					return;
-			}
-		}
-	}
-
-	if (attr && !xr_strcmp(attr, "texture"))
-		LoadTextureSlot(xml, path, out);
-	else if (attr && !xr_strcmp(attr, "active_texture"))
-		LoadActiveTextureSlot(xml, path, out);
-}
-
-void CInteractionMarkerManager::LoadActiveTextureSlot(CUIXml& xml, LPCSTR path, SWSUITextureSlot& out) const
-{
-	out.raster = nullptr;
-	out.svg = nullptr;
-
-	if (LPCSTR tex = xml.ReadAttrib(path, 0, "active_texture", nullptr))
-		out.raster = tex;
-
-	string256 active_svg_node;
-	xr_strconcat(active_svg_node, path, ":active_svg");
-	if (xml.NavigateToNode(active_svg_node, 0))
-	{
-		if (LPCSTR val = xml.Read(active_svg_node, 0, nullptr))
-		{
-			if (val[0])
-				out.svg = val;
-		}
-	}
-
-	if (!out.svg.size())
-	{
-		if (LPCSTR attr = xml.ReadAttrib(path, 0, "active_svg", nullptr))
-		{
-			if (attr[0])
-				out.svg = attr;
-		}
-	}
-
-	if (out.svg.size())
-		out.svg = NormalizeWsuiSvgSubpath(out.svg);
-}
-
-void CInteractionMarkerManager::LoadBackground(CUIXml& xml, LPCSTR path, SWSUIBackground& out, bool read_enable)
-{
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	if (read_enable)
-		out.enabled = xml.ReadAttribInt(path, 0, "enable", 0) != 0;
-	else
-		out.enabled = true;
-
-	LoadIconRefSlot(xml, path, out.texture, "icon");
-	out.height = xml.ReadAttribFlt(path, 0, "height", 0.f);
-	out.width = xml.ReadAttribFlt(path, 0, "width", 0.f);
-	out.pad = xml.ReadAttribFlt(path, 0, "pad", 0.f);
-
-	const int r = xml.ReadAttribInt(path, 0, "r", 255);
-	const int g = xml.ReadAttribInt(path, 0, "g", 255);
-	const int b = xml.ReadAttribInt(path, 0, "b", 255);
-	const int a = xml.ReadAttribInt(path, 0, "a", 255);
-	out.color = color_rgba(r, g, b, a);
-}
-
-void CInteractionMarkerManager::LoadPromptMainPanel(CUIXml& xml)
-{
-	LoadBackground(xml, "wsui_prompt:main_panel:background", m_prompt_cfg.main_panel.background);
-
-	if (xml.NavigateToNode("wsui_prompt:main_panel:keybind", 0))
-	{
-		const LPCSTR path = "wsui_prompt:main_panel:keybind";
-		auto& kb = m_prompt_cfg.main_panel.keybind;
-		kb.width = xml.ReadAttribFlt(path, 0, "width", 0.f);
-		kb.height = xml.ReadAttribFlt(path, 0, "height", 0.f);
-		kb.icon_width = xml.ReadAttribFlt(path, 0, "icon_width", 0.f);
-		kb.icon_height = xml.ReadAttribFlt(path, 0, "icon_height", 0.f);
-		LoadIconRefSlot(xml, path, kb.texture, "icon");
-		LoadIconRefSlot(xml, path, kb.pressed_texture, "pressed_icon", "pressed_texture", "pressed_svg");
-		LoadTextLabel(xml, "wsui_prompt:main_panel:keybind:label", kb.label);
-	}
-
-	auto& at = m_prompt_cfg.main_panel.action_text;
-	LoadTextLabel(xml, "wsui_prompt:main_panel:action_text:verb", at.verb);
-	LoadTextLabel(xml, "wsui_prompt:main_panel:action_text:object_name", at.object_name);
-	LoadTextLabel(xml, "wsui_prompt:main_panel:action_text:full_line", at.full_line);
-}
-
-void CInteractionMarkerManager::LoadPromptItemStackCount(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_prompt:item_stack_count";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	m_prompt_cfg.item_stack_count.group_distance = xml.ReadAttribFlt(path, 0, "group_distance", 0.f);
-}
-
-void CInteractionMarkerManager::LoadPromptItemCondition(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_prompt:item_condition";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	auto& cond = m_prompt_cfg.item_condition;
-	cond.x = xml.ReadAttribFlt(path, 0, "x", 0.f);
-	cond.y = xml.ReadAttribFlt(path, 0, "y", 0.f);
-	cond.line_spacing = xml.ReadAttribFlt(path, 0, "line_spacing", 0.f);
-	LoadTextLabel(xml, "wsui_prompt:item_condition:label", cond.label);
-	LoadBackground(xml, "wsui_prompt:item_condition:background", cond.background, true);
-
-	const LPCSTR grad_path = "wsui_prompt:item_condition:color_gradient";
-	if (xml.NavigateToNode(grad_path, 0))
-	{
-		const int min_r = xml.ReadAttribInt(grad_path, 0, "min_r", 0);
-		const int min_g = xml.ReadAttribInt(grad_path, 0, "min_g", 0);
-		const int min_b = xml.ReadAttribInt(grad_path, 0, "min_b", 0);
-		const int min_a = xml.ReadAttribInt(grad_path, 0, "min_a", 0);
-		const int max_r = xml.ReadAttribInt(grad_path, 0, "max_r", 0);
-		const int max_g = xml.ReadAttribInt(grad_path, 0, "max_g", 0);
-		const int max_b = xml.ReadAttribInt(grad_path, 0, "max_b", 0);
-		const int max_a = xml.ReadAttribInt(grad_path, 0, "max_a", 0);
-		cond.color_min = color_rgba(min_r, min_g, min_b, min_a);
-		cond.color_max = color_rgba(max_r, max_g, max_b, max_a);
-	}
-}
-
-void CInteractionMarkerManager::LoadPromptItemCard(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_prompt:item_card";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	auto& card = m_prompt_cfg.item_card;
-	card.x = xml.ReadAttribFlt(path, 0, "x", 0.f);
-	card.y = xml.ReadAttribFlt(path, 0, "y", 0.f);
-	LoadBackground(xml, "wsui_prompt:item_card:background", card.background);
-	LoadItemCardMetric(xml, "wsui_prompt:item_card:weight_metric", card.weight);
-	LoadItemCardMetric(xml, "wsui_prompt:item_card:value_metric", card.value);
-}
-
-void CInteractionMarkerManager::LoadPromptTutorialScreen(CUIXml& xml)
-{
-	const LPCSTR path = "wsui_prompt:tutorial_screen";
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	m_prompt_cfg.tutorial_x = xml.ReadAttribFlt(path, 0, "x", 0.f);
-	m_prompt_cfg.tutorial_y = xml.ReadAttribFlt(path, 0, "y", 0.f);
-}
-
-void CInteractionMarkerManager::LoadItemCardMetric(CUIXml& xml, LPCSTR path, SWSUIItemCardMetric& out) const
-{
-	if (!xml.NavigateToNode(path, 0))
-		return;
-
-	out.x = xml.ReadAttribFlt(path, 0, "x", out.x);
-	out.y = xml.ReadAttribFlt(path, 0, "y", out.y);
-	out.icon_x = xml.ReadAttribFlt(path, 0, "icon_x", out.icon_x);
-	out.icon_y = xml.ReadAttribFlt(path, 0, "icon_y", out.icon_y);
-	out.icon_w = xml.ReadAttribFlt(path, 0, "icon_w", out.icon_w);
-	out.icon_h = xml.ReadAttribFlt(path, 0, "icon_h", out.icon_h);
-	out.text_x = xml.ReadAttribFlt(path, 0, "text_x", out.text_x);
-	out.text_y = xml.ReadAttribFlt(path, 0, "text_y", out.text_y);
-	out.text_height = xml.ReadAttribFlt(path, 0, "text_height", out.text_height);
-	LoadIconRefSlot(xml, path, out.icon, "icon", "icon", "svg");
-
-	if (LPCSTR font_name = xml.ReadAttrib(path, 0, "font", nullptr))
-		out.font_name = font_name;
-
-	u32 color = out.color;
-	CGameFont* loaded_font = nullptr;
-	if (CUIXmlInit::InitFont(xml, path, 0, color, loaded_font) && loaded_font)
-	{
-		out.font = loaded_font;
-		out.color = color;
-	}
-	else if (g_FontManager && g_FontManager->pFontSystem)
-		out.font = g_FontManager->pFontSystem;
-
-	CUIXmlInit::ReadShadowsNode(xml, path, 0, out.text_shadow);
-}
-
-void CInteractionMarkerManager::LoadFocusSound()
-{
-	HUD_SOUND_ITEM::DestroySound(m_focus_snd);
-	m_focus_sound_loaded = false;
-
-	if (!m_markers_cfg.features.enable_focus_sound)
-		return;
-
-	if (!pSettings->section_exist("wsui_sounds"))
-		return;
-
-	if (!pSettings->line_exist("wsui_sounds", "snd_focus"))
-		return;
-
-	HUD_SOUND_ITEM::LoadSound("wsui_sounds", "snd_focus", m_focus_snd, SOUND_TYPE_IDLE);
-	m_focus_sound_loaded = !m_focus_snd.sounds.empty();
-}
-
 void CInteractionMarkerManager::PlayFocusSound() const
 {
 	if (!m_focus_sound_loaded)
@@ -2954,723 +1317,6 @@ void CInteractionMarkerManager::UpdateAnimations(CActor* actor)
 	UpdateTutorialPromptFade();
 }
 
-bool CInteractionMarkerManager::DrawTextureSlot(const SWSUITextureSlot& slot, float cx, float cy, float w, float h, u32 color, bool keep_square, float angle) const
-{
-	if (!slot.HasDrawable())
-		return false;
-
-	if (keep_square)
-		h = SquareHeight(w);
-
-	CUIStaticItem item;
-	bool initialized = false;
-
-	const shared_str svg_path = NormalizeWsuiSvgSubpath(slot.svg);
-	if (svg_path.size())
-	{
-		if (EnsureSvgCache(svg_path, w, h))
-		{
-			const SWSUISvgCacheEntry& cache = m_svg_cache[svg_path];
-			item.SetShader(cache.shader);
-			item.SetTextureRect(cache.uv);
-			item.SetTextureColor(color);
-			initialized = true;
-		}
-		else if (slot.svg.size())
-		{
-			Msg("! [wsui] SVG not found, using raster fallback: %s", slot.svg.c_str());
-		}
-	}
-
-	if (!initialized && slot.raster.size())
-	{
-		if (!CUITextureMaster::ItemExist(slot.raster))
-			return false;
-
-		initialized = CUITextureMaster::InitTexture(slot.raster, &item, "hud\\cursor", false);
-		if (initialized)
-			item.SetTextureColor(color);
-	}
-
-	if (!initialized)
-		return false;
-
-	item.SetSize(Fvector2().set(w, h));
-	item.SetPos(cx - w * 0.5f, cy - h * 0.5f);
-	if (angle != 0.f)
-		item.Render(angle);
-	else
-		item.Render();
-	return true;
-}
-
-u32 CInteractionMarkerManager::GetItemConditionColor(float condition) const
-{
-	clamp(condition, 0.f, 1.f);
-
-	Fcolor c1, c2, result;
-	c1.set(m_prompt_cfg.item_condition.color_min);
-	c2.set(m_prompt_cfg.item_condition.color_max);
-	result.lerp(c1, c2, condition);
-	return result.get();
-}
-
-u32 CInteractionMarkerManager::CountGroupedItemMarkers(const SInteractionMarker& focus_marker) const
-{
-	if (focus_marker.cls != EWSUIClass::Item)
-		return 1;
-
-	CObject* focus_obj = Level().Objects.net_Find(focus_marker.object_id);
-	CInventoryItem* focus_item = focus_obj ? focus_obj->cast_inventory_item() : nullptr;
-	if (!focus_item)
-		return 1;
-
-	const shared_str section = focus_item->m_section_id.size() ? focus_item->m_section_id : focus_obj->cNameSect();
-	const Fvector2& focus_pos = focus_marker.screen_pos;
-	u32 count = 0;
-
-	for (const auto& [id, marker] : m_markers)
-	{
-		if (marker.cls != EWSUIClass::Item || !marker.visible || !marker.reachable)
-			continue;
-
-		if (marker.screen_pos.x < 0.f || focus_pos.x < 0.f)
-			continue;
-
-		if (marker.screen_pos.distance_to(focus_pos) > m_prompt_cfg.item_stack_count.group_distance)
-			continue;
-
-		CObject* obj = Level().Objects.net_Find(id);
-		CInventoryItem* item = obj ? obj->cast_inventory_item() : nullptr;
-		if (!item)
-			continue;
-
-		const shared_str item_section = item->m_section_id.size() ? item->m_section_id : obj->cNameSect();
-		if (item_section != section)
-			continue;
-
-		++count;
-	}
-
-	return count > 0 ? count : 1;
-}
-
-const SWSUITextureSlot* CInteractionMarkerManager::ResolveKeyBindIcon(int dik, float& out_w, float& out_h) const
-{
-	auto it = m_dik_icons.find(dik);
-	if (it == m_dik_icons.end() || !it->second.HasDrawable())
-		return nullptr;
-
-	out_w = m_prompt_cfg.main_panel.keybind.icon_width;
-	out_h = m_prompt_cfg.main_panel.keybind.icon_height;
-	return &it->second;
-}
-
-LPCSTR CInteractionMarkerManager::GetKeyName() const
-{
-	const int dik = get_action_dik(kUSE);
-	return dik > 0 ? dik_to_keyname(dik) : nullptr;
-}
-
-bool CInteractionMarkerManager::BuildPromptParts(CActor* actor, const SInteractionMarker& marker, SWSUIPromptParts& out) const
-{
-	out.split = false;
-	out.verb[0] = 0;
-	out.name[0] = 0;
-	out.full[0] = 0;
-	out.show_condition = false;
-	out.item_condition = 0.f;
-
-	if (!actor)
-		return false;
-
-	CObject* object = Level().Objects.net_Find(marker.object_id);
-	CGameObject* game_object = object ? object->cast_game_object() : nullptr;
-	if (!game_object)
-		return false;
-
-	switch (marker.cls)
-	{
-	case EWSUIClass::Item:
-	{
-		if (CInventoryItem* item = game_object->cast_inventory_item())
-		{
-			xr_strcpy(out.verb, WsuiString("ui_st_wsui_pickup"));
-			if (LPCSTR name = ItemDisplayName(item))
-			{
-				if (m_prompt_cfg.features.item_stack_count)
-				{
-					const u32 count = CountGroupedItemMarkers(marker);
-					if (count > 1)
-						xr_sprintf(out.name, sizeof(out.name), "%s x%u", name, count);
-					else
-						xr_strcpy(out.name, name);
-				}
-				else
-				{
-					xr_strcpy(out.name, name);
-				}
-			}
-
-			if (m_prompt_cfg.features.item_condition && item->IsUsingCondition())
-			{
-				out.show_condition = true;
-				out.item_condition = item->GetCondition();
-			}
-
-			out.split = true;
-			return out.verb[0] != 0;
-		}
-		break;
-	}
-	case EWSUIClass::Npc:
-	{
-		if (CAI_Stalker* stalker = game_object->cast_stalker())
-		{
-			xr_strcpy(out.verb, WsuiString("ui_st_wsui_talk"));
-			if (LPCSTR name = stalker->Name())
-				xr_strcpy(out.name, name);
-			out.split = true;
-			return out.verb[0] != 0;
-		}
-		break;
-	}
-	case EWSUIClass::Body:
-	{
-		xr_strcpy(out.verb, WsuiString("ui_st_wsui_search"));
-		if (LPCSTR name = BodyDisplayName(game_object))
-			xr_strcpy(out.name, name);
-		out.split = true;
-		return out.verb[0] != 0;
-	}
-	case EWSUIClass::Stash:
-	{
-		xr_strcpy(out.verb, WsuiString("ui_st_wsui_open"));
-		out.split = true;
-		return out.verb[0] != 0;
-	}
-	case EWSUIClass::Usable:
-	{
-		if (CUsableScriptObject* usable = game_object->cast_usable_script_object())
-		{
-			if (usable->tip_text() && usable->tip_text()[0])
-			{
-				xr_strcpy(out.full, g_pStringTable->translate(usable->tip_text()).c_str());
-				return out.full[0] != 0;
-			}
-		}
-		break;
-	}
-	case EWSUIClass::Door:
-	{
-		if (CUsableScriptObject* usable = game_object->cast_usable_script_object())
-		{
-			if (usable->tip_text() && usable->tip_text()[0])
-			{
-				xr_strcpy(out.full, g_pStringTable->translate(usable->tip_text()).c_str());
-				return out.full[0] != 0;
-			}
-		}
-		break;
-	}
-	case EWSUIClass::Campfire:
-	{
-		if (CZoneCampfire* campfire = game_object->cast_zone_campfire())
-		{
-			LPCSTR key = campfire->is_on() ? "st_extinguish_fire" : "st_ignite_fire";
-			xr_strcpy(out.full, g_pStringTable->translate(key).c_str());
-			return out.full[0] != 0;
-		}
-		break;
-	}
-	case EWSUIClass::Zone:
-	{
-		if (LPCSTR prompt = ResolveZonePrompt(game_object))
-		{
-			xr_strcpy(out.full, g_pStringTable->translate(prompt).c_str());
-			return out.full[0] != 0;
-		}
-		break;
-	}
-	default:
-		break;
-	}
-
-	if (LPCSTR action = actor->GetDefaultActionForObject())
-	{
-		if (action[0])
-		{
-			xr_strcpy(out.full, action);
-			return true;
-		}
-	}
-
-	return false;
-}
-
-bool CInteractionMarkerManager::BuildPromptText(CActor* actor, const SInteractionMarker& marker, string512& out) const
-{
-	out[0] = 0;
-
-	SWSUIPromptParts parts;
-	if (!BuildPromptParts(actor, marker, parts))
-		return false;
-
-	if (parts.split)
-	{
-		if (parts.name[0])
-			xr_sprintf(out, sizeof(out), "%s %s", parts.verb, parts.name);
-		else
-			xr_sprintf(out, sizeof(out), "%s", parts.verb);
-	}
-	else
-	{
-		xr_sprintf(out, sizeof(out), "%s", parts.full);
-	}
-
-	return out[0] != 0;
-}
-
-void CInteractionMarkerManager::SanitizeActionText(string512& text) const
-{
-	xr_string sanitized(text);
-
-	for (;;)
-	{
-		const size_t pos = sanitized.find("$$ACTION_USE$$");
-		if (pos == xr_string::npos)
-			break;
-		sanitized.erase(pos, 14);
-	}
-
-	for (;;)
-	{
-		const size_t pos = sanitized.find(" ()");
-		if (pos == xr_string::npos)
-			break;
-		sanitized.erase(pos, 3);
-	}
-
-	for (;;)
-	{
-		const size_t pos = sanitized.find("( )");
-		if (pos == xr_string::npos)
-			break;
-		sanitized.erase(pos, 3);
-	}
-
-	while (!sanitized.empty() && sanitized.back() == ' ')
-		sanitized.pop_back();
-
-	xr_strcpy(text, sanitized.c_str());
-}
-
-float CInteractionMarkerManager::PromptTextWidth(CGameFont* font, LPCSTR text, float kx) const
-{
-	if (!font || !text || !text[0])
-		return 0.f;
-
-	return (font->WidthOf(text) * m_prompt_cfg.font_scale_w) / kx;
-}
-
-float CInteractionMarkerManager::PromptTextHeight(CGameFont* font, float ky) const
-{
-	if (!font)
-		return 0.f;
-
-	return (font->CurrentHeight_() * m_prompt_cfg.font_scale_h) / ky;
-}
-
-const SUIOutlineParams& CInteractionMarkerManager::ResolveTextShadow(const SUIOutlineParams& label_shadow) const
-{
-	if (label_shadow.enabled)
-		return label_shadow;
-	return m_prompt_cfg.default_text_shadow;
-}
-
-void CInteractionMarkerManager::DrawPromptText(CGameFont* font, float x, float y, float kx, float ky, LPCSTR text, u32 color, CGameFont::EAligment align, const SUIOutlineParams& label_shadow) const
-{
-	if (!font || !text || !text[0])
-		return;
-
-	font->SetAligment(align);
-
-	const SUIOutlineParams& shadow = ResolveTextShadow(label_shadow);
-	const u32 textAlpha = color_get_A(color);
-	u32 outlineColor = 0;
-	if (shadow.enabled && shadow.thickness > 0.f && textAlpha > 0)
-	{
-		const u32 outlineAlpha = (color_get_A(shadow.color) * textAlpha) / 255;
-		if (outlineAlpha > 0)
-			outlineColor = subst_alpha(shadow.color, outlineAlpha);
-	}
-
-	if (outlineColor != 0)
-	{
-		for (const Fvector2& d : UIOutline::kDirs8)
-		{
-			font->SetColor(outlineColor);
-			font->Out(x + d.x * shadow.thickness * kx, y + d.y * shadow.thickness * ky, "%s", text);
-		}
-	}
-
-	font->SetColor(color);
-	font->Out(x, y, "%s", text);
-	font->OnRender();
-}
-
-namespace
-{
-bool IsUseKeyPressed()
-{
-	if (!pInput)
-		return false;
-
-	const int key1 = get_action_dik(kUSE, 0);
-	const int key2 = get_action_dik(kUSE, 1);
-	return (key1 > 0 && pInput->iGetAsyncKeyState(key1)) || (key2 > 0 && pInput->iGetAsyncKeyState(key2));
-}
-}
-
-void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWSUIPromptParts& parts_in, LPCSTR key_name, float alpha, bool center_anchor, const SInteractionMarker* marker) const
-{
-	SWSUIPromptParts parts = parts_in;
-	if (parts.split)
-	{
-		SanitizeActionText(parts.verb);
-		if (!parts.verb[0] && !parts.name[0])
-			return;
-	}
-	else
-	{
-		SanitizeActionText(parts.full);
-		if (!parts.full[0])
-			return;
-	}
-
-	const auto& kb = m_prompt_cfg.main_panel.keybind;
-	const auto& at = m_prompt_cfg.main_panel.action_text;
-	const auto& bg = m_prompt_cfg.main_panel.background;
-	const auto& cond_cfg = m_prompt_cfg.item_condition;
-
-	CGameFont* key_font = kb.label.font ? kb.label.font : (g_FontManager ? g_FontManager->pFontSystem : nullptr);
-	CGameFont* verb_font = at.verb.font ? at.verb.font : (g_FontManager ? g_FontManager->pFontSystem : nullptr);
-	CGameFont* name_font = at.object_name.font ? at.object_name.font : (g_FontManager ? g_FontManager->pFontSystem : nullptr);
-	CGameFont* full_font = at.full_line.font ? at.full_line.font : verb_font;
-	if (!key_font || !verb_font || !name_font || !full_font)
-		return;
-
-	const float scale = UiScale();
-	const float kx = Device.TargetWidth / UI_BASE_WIDTH;
-	const float ky = Device.TargetHeight / UI_BASE_HEIGHT;
-
-	float text_w = 0.f;
-	float text_h = 0.f;
-	if (parts.split)
-	{
-		text_w += PromptTextWidth(verb_font, parts.verb, kx);
-		if (parts.name[0])
-		{
-			text_w += PromptTextWidth(verb_font, " ", kx);
-			text_w += PromptTextWidth(name_font, parts.name, kx);
-		}
-		text_h = std::max(PromptTextHeight(verb_font, ky), PromptTextHeight(name_font, ky));
-	}
-	else
-	{
-		text_w = PromptTextWidth(full_font, parts.full, kx);
-		text_h = PromptTextHeight(full_font, ky);
-	}
-
-	const bool show_keybind = m_prompt_cfg.features.keybind && key_name && key_name[0];
-	const int use_dik = get_action_dik(kUSE, 0);
-	float bind_icon_w = 0.f;
-	float bind_icon_h = 0.f;
-	const SWSUITextureSlot* bind_icon = (show_keybind && use_dik > 0) ? ResolveKeyBindIcon(use_dik, bind_icon_w, bind_icon_h) : nullptr;
-	const float key_w = show_keybind ? (bind_icon ? bind_icon_w : kb.width) * scale : 0.f;
-	const float key_h = show_keybind ? (bind_icon ? bind_icon_h : SquareHeight(kb.width * scale)) : 0.f;
-	const float gap = show_keybind ? m_prompt_cfg.text_pad * scale : 0.f;
-	const float drop_w = key_w + gap + text_w + m_prompt_cfg.text_pad * 2.f * scale;
-	const float content_h = std::max(key_h, text_h);
-	const float drop_h = std::max(bg.height * scale, content_h + m_prompt_cfg.text_pad * scale);
-
-	const float drop_cx = cx;
-	const float drop_cy = center_anchor ? cy : cy + drop_h * 0.5f;
-	const float content_cy = drop_cy;
-	const float panel_left = drop_cx - drop_w * 0.5f;
-	const float panel_top = drop_cy - drop_h * 0.5f;
-
-	DrawTextureSlot(bg.texture, drop_cx, drop_cy, drop_w, drop_h, ColorWithAlpha(bg.color, alpha), false);
-
-	float cursor_x = drop_cx - drop_w * 0.5f + m_prompt_cfg.text_pad * scale;
-
-	if (show_keybind)
-	{
-		const float key_cx = cursor_x + key_w * 0.5f;
-		if (bind_icon)
-		{
-			DrawTextureSlot(*bind_icon, key_cx, content_cy, key_w, key_h, ColorWithAlpha(0xFFFFFFFF, alpha), true);
-		}
-		else
-		{
-			const SWSUITextureSlot& key_tex = (kb.pressed_texture.HasDrawable() && IsUseKeyPressed())
-				? kb.pressed_texture
-				: kb.texture;
-			DrawTextureSlot(key_tex, key_cx, content_cy, key_w, key_h, ColorWithAlpha(0xFFFFFFFF, alpha), true);
-
-			const float font_h = key_font->CurrentHeight_() * m_prompt_cfg.font_scale_h;
-			DrawPromptText(key_font,
-				(key_cx + kb.label.x * scale) * kx,
-				content_cy * ky - font_h * 0.5f + kb.label.y * scale,
-				kx, ky, key_name,
-				ColorWithAlpha(kb.label.color, alpha),
-				CGameFont::alCenter, kb.label.text_shadow);
-		}
-		cursor_x += key_w + gap;
-	}
-
-	const float action_x = parts.split ? at.verb.x : at.full_line.x;
-	const float action_y = parts.split ? at.verb.y : at.full_line.y;
-	const float text_y = (content_cy - text_h * 0.5f + action_y * scale) * ky;
-	const float text_x = (cursor_x + action_x * scale) * kx;
-
-	if (parts.split)
-	{
-		DrawPromptText(verb_font, text_x, text_y, kx, ky, parts.verb,
-			ColorWithAlpha(at.verb.color, alpha), CGameFont::alLeft, at.verb.text_shadow);
-
-		float segment_x = text_x + verb_font->WidthOf(parts.verb) * m_prompt_cfg.font_scale_w;
-		if (parts.name[0])
-		{
-			segment_x += verb_font->WidthOf(" ") * m_prompt_cfg.font_scale_w;
-			DrawPromptText(name_font, segment_x, text_y, kx, ky, parts.name,
-				ColorWithAlpha(at.object_name.color, alpha), CGameFont::alLeft, at.object_name.text_shadow);
-		}
-	}
-	else
-	{
-		DrawPromptText(full_font, text_x, text_y, kx, ky, parts.full,
-			ColorWithAlpha(at.full_line.color, alpha), CGameFont::alLeft, at.full_line.text_shadow);
-	}
-
-	if (parts.show_condition)
-	{
-		CGameFont* cond_font = cond_cfg.label.font ? cond_cfg.label.font : name_font;
-		if (cond_font)
-		{
-			const int percent = (int)(parts.item_condition * 100.f);
-			string256 condition_str;
-			xr_sprintf(condition_str, sizeof(condition_str), "%d%%", percent);
-
-			shared_str condition_label = g_pStringTable->translate("ui_st_loot_info_condition");
-			string256 cond_text;
-			if (condition_label.size() > 0 && xr_strcmp(condition_label.c_str(), "ui_st_loot_info_condition") != 0)
-				xr_sprintf(cond_text, sizeof(cond_text), "%s: %s", condition_label.c_str(), condition_str);
-			else
-			{
-				condition_label = g_pStringTable->translate("ui_st_wsui_condition");
-				if (condition_label.size() > 0 && xr_strcmp(condition_label.c_str(), "ui_st_wsui_condition") != 0)
-					xr_sprintf(cond_text, sizeof(cond_text), "%s: %s", condition_label.c_str(), condition_str);
-				else
-					xr_sprintf(cond_text, sizeof(cond_text), "%s", condition_str);
-			}
-
-			const float cond_h = PromptTextHeight(cond_font, ky);
-			const float cond_ui_x = panel_left + cond_cfg.x * scale;
-			const float cond_ui_y = panel_top + drop_h + m_prompt_cfg.text_pad * scale + cond_cfg.y * scale;
-			const float cond_x = cond_ui_x * kx;
-			const float cond_y = cond_ui_y * ky;
-
-			if (cond_cfg.background.enabled && cond_cfg.background.texture.HasDrawable())
-			{
-				const float text_w_ui = PromptTextWidth(cond_font, cond_text, kx);
-				const float text_h_ui = cond_h / ky;
-				const float pad = cond_cfg.background.pad * scale;
-				const float cond_drop_w = (cond_cfg.background.width > 0.f ? cond_cfg.background.width : text_w_ui + pad * 2.f) * scale;
-				const float drop_h_cond = (cond_cfg.background.height > 0.f ? cond_cfg.background.height : text_h_ui + pad * 2.f) * scale;
-				const float cond_drop_cx = cond_ui_x + cond_drop_w * 0.5f;
-				const float cond_drop_cy = cond_ui_y + drop_h_cond * 0.5f;
-				const u32 drop_color = cond_cfg.background.color;
-				DrawTextureSlot(cond_cfg.background.texture, cond_drop_cx, cond_drop_cy, cond_drop_w, drop_h_cond, ColorWithAlpha(drop_color, alpha), false);
-			}
-
-			DrawPromptText(cond_font, cond_x, cond_y + cond_h * (cond_cfg.line_spacing - 1.f), kx, ky, cond_text,
-				ColorWithAlpha(GetItemConditionColor(parts.item_condition), alpha),
-				CGameFont::alLeft, cond_cfg.label.text_shadow);
-		}
-	}
-
-	if (m_prompt_cfg.features.item_card && marker && marker->cls == EWSUIClass::Item)
-	{
-		if (CObject* object = Level().Objects.net_Find(marker->object_id))
-		{
-			if (CInventoryItem* item = object->cast_inventory_item())
-				RenderItemCard(panel_left, panel_top + drop_h, item, alpha);
-		}
-	}
-}
-
-void CInteractionMarkerManager::RenderItemCard(float panel_left, float panel_bottom, CInventoryItem* item, float alpha) const
-{
-	if (!item)
-		return;
-
-	const auto& card = m_prompt_cfg.item_card;
-	const bool has_weight = card.weight.icon.HasDrawable();
-	const bool has_value = card.value.icon.HasDrawable() && item->IsDrawCost();
-	if (!has_weight && !has_value)
-		return;
-
-	const float scale = UiScale();
-	const float kx = Device.TargetWidth / UI_BASE_WIDTH;
-	const float ky = Device.TargetHeight / UI_BASE_HEIGHT;
-	const float origin_x = panel_left + card.x * scale;
-	const float origin_y = panel_bottom + card.y * scale;
-
-	auto metric_right = [&](const SWSUIItemCardMetric& metric, LPCSTR text, CGameFont* font) -> float
-	{
-		float right = metric.x + metric.icon_x + metric.icon_w;
-		if (text && text[0] && font)
-		{
-			const float text_right = metric.text_x + (font->WidthOf(text) * m_prompt_cfg.font_scale_w) / kx;
-			right = std::max(right, text_right);
-		}
-		return right;
-	};
-
-	string32 weight_str;
-	string32 cost_str;
-	if (has_weight)
-		xr_sprintf(weight_str, sizeof(weight_str), "%.1f", item->Weight());
-	if (has_value)
-		xr_sprintf(cost_str, sizeof(cost_str), "%u", item->Cost());
-
-	auto metric_text_height = [&](const SWSUIItemCardMetric& metric, CGameFont* font) -> float
-	{
-		if (metric.text_height > 0.f)
-			return metric.text_height;
-		if (font)
-			return font->CurrentHeight_() * m_prompt_cfg.font_scale_h / ky;
-		return 12.f;
-	};
-
-	auto metric_bottom = [&](const SWSUIItemCardMetric& metric, LPCSTR text, CGameFont* font) -> float
-	{
-		const float text_h = metric_text_height(metric, font);
-		return metric.y + std::max(metric.icon_y + metric.icon_h, metric.text_y + text_h);
-	};
-
-	float content_right = 0.f;
-	float content_bottom = 0.f;
-	if (has_weight)
-	{
-		content_right = std::max(content_right, metric_right(card.weight, weight_str, card.weight.font));
-		content_bottom = std::max(content_bottom, metric_bottom(card.weight, weight_str, card.weight.font));
-	}
-	if (has_value)
-	{
-		content_right = std::max(content_right, metric_right(card.value, cost_str, card.value.font));
-		content_bottom = std::max(content_bottom, metric_bottom(card.value, cost_str, card.value.font));
-	}
-
-	const float drop_h = (card.background.height > 0.f ? card.background.height : content_bottom + 2.f) * scale;
-	const float drop_w = (card.background.width > 0.f ? card.background.width : content_right + 4.f) * scale;
-	const float drop_cx = origin_x + drop_w * 0.5f;
-	const float drop_cy = origin_y + drop_h * 0.5f;
-
-	if (card.background.texture.HasDrawable())
-		DrawTextureSlot(card.background.texture, drop_cx, drop_cy, drop_w, drop_h, ColorWithAlpha(card.background.color, alpha), false);
-
-	auto draw_metric = [&](const SWSUIItemCardMetric& metric, LPCSTR text)
-	{
-		if (!metric.icon.HasDrawable())
-			return;
-
-		CGameFont* font = metric.font ? metric.font : (g_FontManager ? g_FontManager->pFontSystem : nullptr);
-		const float mx = origin_x + metric.x * scale;
-		const float my = origin_y + metric.y * scale;
-		const float iw = metric.icon_w * scale;
-		const float ih = metric.icon_h * scale;
-		const float icon_cx = mx + (metric.icon_x + metric.icon_w * 0.5f) * scale;
-		const float icon_cy = my + (metric.icon_y + metric.icon_h * 0.5f) * scale;
-
-		DrawTextureSlot(metric.icon, icon_cx, icon_cy, iw, ih, ColorWithAlpha(0xFFFFFFFF, alpha), true);
-
-		if (text && text[0] && font)
-		{
-			DrawPromptText(font,
-				(mx + metric.text_x * scale) * kx, (my + metric.text_y * scale) * ky,
-				kx, ky, text, ColorWithAlpha(metric.color, alpha),
-				CGameFont::alLeft, metric.text_shadow);
-		}
-	};
-
-	if (has_weight)
-		draw_metric(card.weight, weight_str);
-	if (has_value)
-		draw_metric(card.value, cost_str);
-}
-
-void CInteractionMarkerManager::RenderPrompt(CActor* actor) const
-{
-	if (!actor || m_prompt_focus_id == 0xffff || m_prompt_alpha <= 0.01f)
-		return;
-
-	auto it = m_markers.find(m_prompt_focus_id);
-	if (it == m_markers.end() || !it->second.visible || !it->second.reachable)
-		return;
-
-	if (it->second.distance > m_markers_cfg.scan.prompt_distance)
-		return;
-
-	SWSUIPromptParts parts;
-	if (!BuildPromptParts(actor, it->second, parts))
-		return;
-
-	LPCSTR key_name = GetKeyName();
-	const float alpha = m_prompt_alpha;
-	const float scale = UiScale();
-
-	if (m_prompt_cfg.features.fixed_screen)
-	{
-		RenderPromptBubble(m_prompt_cfg.features.fixed_x * scale, m_prompt_cfg.features.fixed_y * scale, parts, key_name, alpha, true, &it->second);
-		return;
-	}
-
-	const float marker_x = it->second.screen_pos.x + m_prompt_cfg.anchor_x * scale;
-	const float marker_y = it->second.screen_pos.y + m_prompt_cfg.anchor_y * scale;
-	const float dot_h = SquareHeight(m_markers_cfg.dot.size * scale);
-	const float anchor_y = marker_y + dot_h * 0.5f + m_prompt_cfg.text_pad * scale;
-
-	RenderPromptBubble(marker_x, anchor_y, parts, key_name, alpha, false, &it->second);
-}
-
-void CInteractionMarkerManager::RenderTutorialPrompt() const
-{
-	if (m_tutorial_prompt_alpha <= 0.01f)
-		return;
-
-	LPCSTR tutorial_name = GetActiveTutorialName();
-	LPCSTR prompt_key = ResolveTutorialPrompt(tutorial_name);
-	if (!prompt_key)
-		return;
-
-	LPCSTR action_text = g_pStringTable->translate(prompt_key).c_str();
-	if (!action_text || !action_text[0])
-		return;
-
-	SWSUIPromptParts parts;
-	parts.split = false;
-	xr_strcpy(parts.full, action_text);
-
-	const float alpha = m_tutorial_prompt_alpha;
-	const float scale = UiScale();
-	const float cx = m_prompt_cfg.tutorial_x * scale;
-	const float cy = m_prompt_cfg.tutorial_y * scale;
-
-	RenderPromptBubble(cx, cy, parts, GetKeyName(), alpha, true);
-}
-
 void CInteractionMarkerManager::OnRender()
 {
 	if (!IsRuntimeEnabled() || !g_bRendering || !g_actor || !g_actor->g_Alive())
@@ -3690,11 +1336,10 @@ void CInteractionMarkerManager::OnRender()
 			if (!marker.visible || !marker.reachable)
 				continue;
 
-			const u32 idx = static_cast<u32>(marker.cls);
-			if (idx >= static_cast<u32>(EWSUIClass::Count))
+			if (!marker.category_id.size() || !marker.cached_def.texture.HasDrawable())
 				continue;
 
-			const SWSUIClassDef& def = m_classes[idx];
+			const SWSUICategoryDef& def = marker.cached_def;
 			const bool focused = id == m_focus_id;
 			const float popin_scale = focused ? GetFocusPopinScale() : 1.f;
 			const float dist_scale = GetDotDistanceScale(marker.distance, def.show_distance);
@@ -3703,9 +1348,10 @@ void CInteractionMarkerManager::OnRender()
 			CGameObject* marker_obj = nullptr;
 			if (CObject* object = Level().Objects.net_Find(id))
 				marker_obj = object->cast_game_object();
-			const SWSUITextureSlot texture = ResolveActiveTexture(marker_obj, marker.cls, def, focused);
+			const SWSUITextureSlot texture = ResolveActiveTexture(marker_obj, marker.category_id, def, focused);
+			const float icon_scale = texture.EffectiveSizeScale();
 			const float dist_alpha = GetDotDistanceAlpha(marker.distance, def.show_distance);
-			DrawTextureSlot(texture, marker.screen_pos.x, marker.screen_pos.y, dot_w, dot_h, ColorWithAlpha(color, dist_alpha), true);
+			DrawTextureSlot(texture, marker.screen_pos.x, marker.screen_pos.y, dot_w * icon_scale, dot_h * icon_scale, ColorWithAlpha(color, dist_alpha), true);
 		}
 	}
 

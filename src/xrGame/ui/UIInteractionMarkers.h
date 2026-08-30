@@ -2,33 +2,41 @@
 
 #include "../xrCore/_stl_extensions.h"
 #include "../xrCore/_vector2.h"
+#include "../xrCore/FormatParsers/XML/xrXMLParser.h"
 #include "../HudSound.h"
 #include "../../xrUI/ui_defs.h"
 
 class CGameObject;
 class CGameFont;
 class CAI_Stalker;
+class CUIXml;
 
-enum class EWSUIClass : u8
+enum class EWSUICategoryFeature : u32
 {
 	None = 0,
-	Item,
-	Npc,
-	Body,
-	Stash,
-	Usable,
-	Door,
-	Campfire,
-	Zone,
-	Count
+	StackCount = 1 << 0,
+	ItemCard = 1 << 1,
+	ItemCondition = 1 << 2,
+	WheelCycle = 1 << 3,
+	SuppressTutorial = 1 << 4,
+};
+
+enum class EWSUIRuleFlag : u32
+{
+	None = 0,
+	RequireCorpse = 1 << 0,
+	CanTake = 1 << 1,
+	RequireUsableTip = 1 << 2,
 };
 
 struct SWSUITextureSlot
 {
 	shared_str raster;
 	shared_str svg;
+	float size_scale = 1.f;
 
 	bool HasDrawable() const { return raster.size() || svg.size(); }
+	float EffectiveSizeScale() const { return size_scale > 0.f ? size_scale : 1.f; }
 };
 
 struct SWSUISvgCacheEntry
@@ -40,26 +48,45 @@ struct SWSUISvgCacheEntry
 	bool valid = false;
 };
 
-struct SWSUIClassDef
+struct SWSUICategoryDef
 {
 	bool enabled = true;
 	SWSUITextureSlot texture;
 	SWSUITextureSlot active_texture;
 	shared_str bone;
 	float show_distance = 15.f;
+	float priority = 0.f;
+	shared_str pos_mode;
+	shared_str prompt_mode;
+	shared_str verb_id;
+	shared_str name_source;
+	shared_str campfire_on_tip;
+	shared_str campfire_off_tip;
+	u32 feature_flags = 0;
+};
+
+using SWSUIClassDef = SWSUICategoryDef;
+
+struct SWSUIClassRule
+{
+	shared_str category_id;
+	shared_str detector;
+	shared_str param;
+	int order = 0;
+	u32 flags = 0;
 };
 
 struct SInteractionMarker
 {
 	u16 object_id = 0xffff;
-	EWSUIClass cls = EWSUIClass::None;
+	shared_str category_id;
 	Fvector2 screen_pos = {};
 	Fvector2 target_screen_pos = {};
 	float distance = 0.f;
 	bool visible = false;
 	bool reachable = false;
 
-	SWSUIClassDef cached_def = {};
+	SWSUICategoryDef cached_def = {};
 	Fvector cached_offset = {};
 	shared_str cached_bone;
 	bool classify_valid = false;
@@ -170,12 +197,6 @@ struct SWSUIMarkersConfig
 	{
 		float focus = 0.f;
 		float task = 0.f;
-		float npc = 0.f;
-		float stash = 0.f;
-		float usable = 0.f;
-		float door = 0.f;
-		float item = 0.f;
-		float body = 0.f;
 	} marker_priority;
 
 	struct SScan
@@ -297,6 +318,8 @@ private:
 	void EnsureQuestSchemeIndex();
 
 	void LoadClassDefs();
+	void LoadClassificationRules();
+	void BuildDefaultClassificationRules();
 	void LoadLookupSection(LPCSTR section_name, bool is_pos_adj);
 	void LoadFloatLookupSection(LPCSTR section_name, xr_map<shared_str, float>& out);
 	void LoadTextureLookupSection(LPCSTR section_name, xr_map<shared_str, shared_str>& out);
@@ -311,7 +334,7 @@ private:
 	bool IsSquadLeaderNpc(CAI_Stalker* stalker) const;
 	bool MatchSquadOrLeader(u16 object_id, u16 compare_id) const;
 	bool IsTaskTarget(u16 object_id, bool& is_storyline) const;
-	LPCSTR ResolveBoneName(CGameObject* obj, EWSUIClass cls, const SWSUIClassDef& def) const;
+	LPCSTR ResolveBoneName(CGameObject* obj, const SWSUICategoryDef& def) const;
 	bool HasValidBone(CGameObject* obj, LPCSTR bone_name) const;
 	void UpdateAnimations(CActor* actor);
 	void LoadFocusSound();
@@ -328,6 +351,8 @@ private:
 	void LoadMarkerIcons(CUIXml& xml);
 	void LoadMarkerIconRules(CUIXml& xml);
 	void LoadIconPatternSection(LPCSTR section_name, xr_map<shared_str, shared_str>& out);
+	void LoadMarkerCategories(CUIXml& xml);
+	void LoadCategoryNode(CUIXml& xml, XML_NODE* category_node, int index, float default_distance);
 	void LoadMarkersClasses(CUIXml& xml);
 	void LoadMarkersDikIcons(CUIXml& xml);
 	void LoadPromptLayout(CUIXml& xml);
@@ -382,19 +407,27 @@ private:
 	float AspectScaleX() const;
 	void Scan(CActor* actor);
 	void UpdateMarkerPositions(CActor* actor);
-	EWSUIClass ClassifyObject(CGameObject* obj) const;
+	shared_str EvaluateCategory(CGameObject* obj) const;
+	shared_str ClassifyObjectLegacy(CGameObject* obj) const;
+	bool MatchDetector(CGameObject* obj, const SWSUIClassRule& rule) const;
 	bool IsDoorObject(CGameObject* obj) const;
 	bool HasUsableTip(CGameObject* obj) const;
 	bool IsKnownZone(CGameObject* obj) const;
+	bool ShouldShowMonsterCorpse(CGameObject* obj) const;
 	LPCSTR ResolveZonePrompt(CGameObject* obj) const;
 	LPCSTR ResolveDoorBone(CGameObject* obj) const;
 	float GetDoorVisualYOffset(CGameObject* obj) const;
-	SWSUITextureSlot ResolveActiveTexture(CGameObject* obj, EWSUIClass cls, const SWSUIClassDef& def, bool focused) const;
-	bool ResolveMarkerDef(CGameObject* obj, EWSUIClass cls, SWSUIClassDef& out_def, Fvector& out_offset) const;
-	bool GetMarkerWorldPos(CGameObject* obj, EWSUIClass cls, LPCSTR bone_name, const Fvector& offset, Fvector& out) const;
+	const SWSUICategoryDef* GetCategory(shared_str category_id) const;
+	float GetCategoryPriorityScore(shared_str category_id) const;
+	bool CategoryHasFeature(shared_str category_id, EWSUICategoryFeature feature) const;
+	SWSUITextureSlot ResolveActiveTexture(CGameObject* obj, shared_str category_id, const SWSUICategoryDef& def, bool focused) const;
+	bool ResolveMarkerDef(CGameObject* obj, shared_str category_id, SWSUICategoryDef& out_def, Fvector& out_offset) const;
+	bool GetMarkerWorldPos(CGameObject* obj, shared_str category_id, const SWSUICategoryDef& def, LPCSTR bone_name, const Fvector& offset, Fvector& out) const;
 	Fvector2 WorldToScreen(const Fvector& world_pos, bool allow_offscreen = false) const;
 	bool DrawTextureSlot(const SWSUITextureSlot& slot, float cx, float cy, float w, float h, u32 color, bool keep_square = false, float angle = 0.f) const;
 	bool BuildPromptParts(CActor* actor, const SInteractionMarker& marker, SWSUIPromptParts& out) const;
+	bool BuildPromptByMode(CActor* actor, CGameObject* game_object, const SWSUICategoryDef& category, const SInteractionMarker& marker, SWSUIPromptParts& out) const;
+	bool ResolvePromptName(CGameObject* game_object, shared_str name_source, string256& out) const;
 	bool BuildPromptText(CActor* actor, const SInteractionMarker& marker, string512& out) const;
 	void RenderPrompt(CActor* actor) const;
 	void RenderTutorialPrompt() const;
@@ -407,7 +440,7 @@ private:
 	bool HasLineOfSight(CActor* actor, CGameObject* obj, const Fvector& world_pos) const;
 	float SquareHeight(float width_ui) const;
 	void ApplyMarkerLimit(CActor* actor);
-	void RefreshMarkerClassifyCache(SInteractionMarker& marker, CGameObject* obj, EWSUIClass cls);
+	void RefreshMarkerClassifyCache(SInteractionMarker& marker, CGameObject* obj, shared_str category_id);
 	void RebuildLosRoundRobinOrder();
 	void MarkLosCachesStale();
 	bool IsScanEnvironmentMoving(CActor* actor) const;
@@ -422,7 +455,7 @@ private:
 	bool m_hide_mute_stalkers = true;
 	bool m_enable_quest_scheme_scan = true;
 	bool m_focus_sound_loaded = false;
-	bool m_classes_from_xml = false;
+	bool m_categories_from_xml = false;
 	bool m_dik_icons_from_xml = false;
 	u32 m_last_scan_time = 0;
 	Fvector m_scan_actor_pos = {};
@@ -442,7 +475,9 @@ private:
 
 	HUD_SOUND_ITEM m_focus_snd;
 
-	SWSUIClassDef m_classes[static_cast<u32>(EWSUIClass::Count)];
+	xr_map<shared_str, SWSUICategoryDef> m_categories;
+	xr_map<shared_str, float> m_category_priority;
+	xr_vector<SWSUIClassRule> m_class_rules;
 	xr_map<shared_str, SWSUITextureSlot> m_icon_registry;
 	xr_map<shared_str, shared_str> m_icon_rules;
 	xr_map<shared_str, shared_str> m_npc_section_patterns;
@@ -486,7 +521,6 @@ private:
 
 extern CInteractionMarkerManager* g_pInteractionMarkerManager;
 
-// WSUI активен: конфиг загружен + runtime enabled
 IC bool WSUI_IsActive()
 {
 	return g_pInteractionMarkerManager
@@ -494,7 +528,6 @@ IC bool WSUI_IsActive()
 		&& g_pInteractionMarkerManager->IsRuntimeEnabled();
 }
 
-// Фасад подавления ванильного UI
 IC bool WSUI_ShouldHidePickupUI()
 {
 	return WSUI_IsActive();
