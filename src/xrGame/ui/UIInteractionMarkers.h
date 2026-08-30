@@ -23,11 +23,28 @@ enum class EWSUIClass : u8
 	Count
 };
 
+struct SWSUITextureSlot
+{
+	shared_str raster;
+	shared_str svg;
+
+	bool HasDrawable() const { return raster.size() || svg.size(); }
+};
+
+struct SWSUISvgCacheEntry
+{
+	ui_shader shader;
+	Frect uv;
+	float ref_w = 0.f;
+	float ref_h = 0.f;
+	bool valid = false;
+};
+
 struct SWSUIClassDef
 {
 	bool enabled = true;
-	shared_str texture;
-	shared_str active_texture;
+	SWSUITextureSlot texture;
+	SWSUITextureSlot active_texture;
 	shared_str bone;
 	float show_distance = 15.f;
 };
@@ -64,7 +81,7 @@ struct SWSUIItemCardMetric
 	float text_x = 0.f;
 	float text_y = 0.f;
 	float text_height = 0.f;
-	shared_str icon;
+	SWSUITextureSlot icon;
 	shared_str font_name;
 	CGameFont* font = nullptr;
 	u32 color = 0;
@@ -84,7 +101,7 @@ struct SWSUITextLabel
 struct SWSUIBackground
 {
 	bool enabled = false;
-	shared_str texture;
+	SWSUITextureSlot texture;
 	float height = 0.f;
 	float width = 0.f;
 	float pad = 0.f;
@@ -93,8 +110,8 @@ struct SWSUIBackground
 
 struct SWSUIKeybindStyle
 {
-	shared_str texture;
-	shared_str pressed_texture;
+	SWSUITextureSlot texture;
+	SWSUITextureSlot pressed_texture;
 	float width = 0.f;
 	float height = 0.f;
 	float icon_width = 0.f;
@@ -308,6 +325,9 @@ private:
 	void LoadMarkersScan(CUIXml& xml);
 	void LoadMarkersLosCache(CUIXml& xml);
 	void LoadMarkersDot(CUIXml& xml);
+	void LoadMarkerIcons(CUIXml& xml);
+	void LoadMarkerIconRules(CUIXml& xml);
+	void LoadIconPatternSection(LPCSTR section_name, xr_map<shared_str, shared_str>& out);
 	void LoadMarkersClasses(CUIXml& xml);
 	void LoadMarkersDikIcons(CUIXml& xml);
 	void LoadPromptLayout(CUIXml& xml);
@@ -320,6 +340,19 @@ private:
 	void LoadPromptTutorialScreen(CUIXml& xml);
 	void LoadTextLabel(CUIXml& xml, LPCSTR path, SWSUITextLabel& out);
 	void LoadBackground(CUIXml& xml, LPCSTR path, SWSUIBackground& out, bool read_enable = false);
+	void LoadTextureSlot(CUIXml& xml, LPCSTR path, SWSUITextureSlot& out, LPCSTR raster_attr = "texture", LPCSTR svg_child = "svg") const;
+	void LoadActiveTextureSlot(CUIXml& xml, LPCSTR path, SWSUITextureSlot& out) const;
+	void LoadIconRefSlot(CUIXml& xml, LPCSTR path, SWSUITextureSlot& out, LPCSTR icon_attr, LPCSTR raster_attr = "texture", LPCSTR svg_child = "svg") const;
+	void LoadClassIconRef(CUIXml& xml, LPCSTR path, LPCSTR attr, SWSUITextureSlot& out) const;
+	SWSUITextureSlot ResolveIcon(shared_str icon_id) const;
+	SWSUITextureSlot ResolveIconRule(LPCSTR event) const;
+	SWSUITextureSlot MatchSectionPattern(shared_str section, const xr_map<shared_str, shared_str>& patterns) const;
+	SWSUITextureSlot MatchNamePattern(shared_str name, const xr_map<shared_str, shared_str>& patterns) const;
+	void InvalidateSvgCache();
+	void PrecacheAllSvgs();
+	void PrecacheSvgPath(shared_str path, float ref_w, float ref_h);
+	float GetMarkerSvgRefSize() const;
+	bool EnsureSvgCache(shared_str path, float ref_w, float ref_h) const;
 	void UpdateFocusSound(CActor* actor);
 	void PlayFocusSound() const;
 	float GetFocusPopinScale() const;
@@ -336,7 +369,7 @@ private:
 	float GetDotDistanceScale(float distance, float show_distance) const;
 	float GetDotDistanceAlpha(float distance, float show_distance) const;
 	float GetMarkerSortScore(u16 id, const SInteractionMarker& marker) const;
-	LPCSTR ResolveKeyBindIcon(int dik, float& out_w, float& out_h) const;
+	const SWSUITextureSlot* ResolveKeyBindIcon(int dik, float& out_w, float& out_h) const;
 	void LoadDikIconsLtx();
 	u32 GetItemConditionColor(float condition) const;
 	u32 CountGroupedItemMarkers(const SInteractionMarker& focus_marker) const;
@@ -356,11 +389,11 @@ private:
 	LPCSTR ResolveZonePrompt(CGameObject* obj) const;
 	LPCSTR ResolveDoorBone(CGameObject* obj) const;
 	float GetDoorVisualYOffset(CGameObject* obj) const;
-	shared_str ResolveActiveTexture(CGameObject* obj, EWSUIClass cls, const SWSUIClassDef& def, bool focused) const;
+	SWSUITextureSlot ResolveActiveTexture(CGameObject* obj, EWSUIClass cls, const SWSUIClassDef& def, bool focused) const;
 	bool ResolveMarkerDef(CGameObject* obj, EWSUIClass cls, SWSUIClassDef& out_def, Fvector& out_offset) const;
 	bool GetMarkerWorldPos(CGameObject* obj, EWSUIClass cls, LPCSTR bone_name, const Fvector& offset, Fvector& out) const;
 	Fvector2 WorldToScreen(const Fvector& world_pos, bool allow_offscreen = false) const;
-	bool DrawTextureMarker(const shared_str& texture_id, float cx, float cy, float w, float h, u32 color, bool keep_square = false, float angle = 0.f) const;
+	bool DrawTextureSlot(const SWSUITextureSlot& slot, float cx, float cy, float w, float h, u32 color, bool keep_square = false, float angle = 0.f) const;
 	bool BuildPromptParts(CActor* actor, const SInteractionMarker& marker, SWSUIPromptParts& out) const;
 	bool BuildPromptText(CActor* actor, const SInteractionMarker& marker, string512& out) const;
 	void RenderPrompt(CActor* actor) const;
@@ -410,6 +443,12 @@ private:
 	HUD_SOUND_ITEM m_focus_snd;
 
 	SWSUIClassDef m_classes[static_cast<u32>(EWSUIClass::Count)];
+	xr_map<shared_str, SWSUITextureSlot> m_icon_registry;
+	xr_map<shared_str, shared_str> m_icon_rules;
+	xr_map<shared_str, shared_str> m_npc_section_patterns;
+	xr_map<shared_str, shared_str> m_usable_section_patterns;
+	xr_map<shared_str, shared_str> m_zone_name_patterns;
+	shared_str m_default_icon_id;
 	xr_map<shared_str, shared_str> m_bones_by_section;
 	xr_map<shared_str, Fvector> m_pos_adj_by_section;
 	xr_map<shared_str, float> m_door_visuals_y;
@@ -421,7 +460,10 @@ private:
 	xr_set<shared_str> m_quest_scheme_stories;
 	xr_set<shared_str> m_breakable_box_visuals;
 	xr_vector<shared_str> m_bone_priority;
-	xr_map<int, shared_str> m_dik_icons;
+	xr_map<int, SWSUITextureSlot> m_dik_icons;
+
+	mutable xr_map<shared_str, SWSUISvgCacheEntry> m_svg_cache;
+	float m_svg_cache_ui_scale = -1.f;
 
 	xr_map<u16, SInteractionMarker> m_markers;
 	u16 m_focus_id = 0xffff;
