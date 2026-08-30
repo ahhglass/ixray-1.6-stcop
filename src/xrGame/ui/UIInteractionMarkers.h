@@ -19,6 +19,8 @@ enum class EWSUICategoryFeature : u32
 	ItemCondition = 1 << 2,
 	WheelCycle = 1 << 3,
 	SuppressTutorial = 1 << 4,
+	HideIfMute = 1 << 5,
+	SuppressVanillaName = 1 << 6,
 };
 
 enum class EWSUIRuleFlag : u32
@@ -55,24 +57,21 @@ struct SWSUICategoryDef
 	SWSUITextureSlot active_texture;
 	shared_str bone;
 	float show_distance = 15.f;
-	float priority = 0.f;
 	shared_str pos_mode;
 	shared_str prompt_mode;
 	shared_str verb_id;
 	shared_str name_source;
 	shared_str campfire_on_tip;
 	shared_str campfire_off_tip;
+	shared_str icon_lookup;
 	u32 feature_flags = 0;
 };
-
-using SWSUIClassDef = SWSUICategoryDef;
 
 struct SWSUIClassRule
 {
 	shared_str category_id;
 	shared_str detector;
 	shared_str param;
-	int order = 0;
 	u32 flags = 0;
 };
 
@@ -81,7 +80,6 @@ struct SInteractionMarker
 	u16 object_id = 0xffff;
 	shared_str category_id;
 	Fvector2 screen_pos = {};
-	Fvector2 target_screen_pos = {};
 	float distance = 0.f;
 	bool visible = false;
 	bool reachable = false;
@@ -291,6 +289,51 @@ struct SWSUIPromptParts
 	float item_condition = 0.f;
 };
 
+struct SWSUIFocusState
+{
+	u16 focus_id = 0xffff;
+	u16 engine_focus_id = 0xffff;
+	u16 wheel_focus_id = 0xffff;
+	u16 prev_focus_id = 0xffff;
+	u16 popin_focus_id = 0xffff;
+	u32 popin_start_time = 0;
+	u16 prompt_focus_id = 0xffff;
+};
+
+struct SWSUIPromptFadeState
+{
+	float alpha = 0.f;
+	float fade_start_alpha = 0.f;
+	bool target_visible = false;
+	u32 fade_start_time = 0;
+};
+
+struct SWSUITutorialFadeState
+{
+	float alpha = 0.f;
+	float fade_start_alpha = 0.f;
+	bool target_visible = false;
+	u32 fade_start_time = 0;
+};
+
+struct SWSUIScanState
+{
+	u32 last_scan_time = 0;
+	Fvector actor_pos = {};
+	Fvector cam_dir = {};
+	bool motion_valid = false;
+};
+
+struct SWSUILosCacheState
+{
+	u32 rr_cursor = 0;
+	u32 rr_order_size = 0;
+	xr_vector<u16> rr_order;
+	Fvector cam_pos = {};
+	Fvector cam_dir = {};
+	bool cam_valid = false;
+};
+
 class CInteractionMarkerManager
 {
 public:
@@ -308,8 +351,6 @@ public:
 	bool IsConfigLoaded() const { return m_config_loaded; }
 	bool IsRuntimeEnabled() const;
 
-	static bool IsEnabled();
-
 	bool ShouldSuppressNpcNameAtDistance(float distance) const;
 	bool ShouldSuppressTutorialUiWhenActive() const;
 
@@ -317,9 +358,7 @@ private:
 	void ClearMarkerState();
 	void EnsureQuestSchemeIndex();
 
-	void LoadClassDefs();
 	void LoadClassificationRules();
-	void BuildDefaultClassificationRules();
 	void LoadLookupSection(LPCSTR section_name, bool is_pos_adj);
 	void LoadFloatLookupSection(LPCSTR section_name, xr_map<shared_str, float>& out);
 	void LoadTextureLookupSection(LPCSTR section_name, xr_map<shared_str, shared_str>& out);
@@ -350,10 +389,8 @@ private:
 	void LoadMarkersDot(CUIXml& xml);
 	void LoadMarkerIcons(CUIXml& xml);
 	void LoadMarkerIconRules(CUIXml& xml);
-	void LoadIconPatternSection(LPCSTR section_name, xr_map<shared_str, shared_str>& out);
 	void LoadMarkerCategories(CUIXml& xml);
 	void LoadCategoryNode(CUIXml& xml, XML_NODE* category_node, int index, float default_distance);
-	void LoadMarkersClasses(CUIXml& xml);
 	void LoadMarkersDikIcons(CUIXml& xml);
 	void LoadPromptLayout(CUIXml& xml);
 	void LoadPromptFeatures(CUIXml& xml);
@@ -368,7 +405,6 @@ private:
 	void LoadTextureSlot(CUIXml& xml, LPCSTR path, SWSUITextureSlot& out, LPCSTR raster_attr = "texture", LPCSTR svg_child = "svg") const;
 	void LoadActiveTextureSlot(CUIXml& xml, LPCSTR path, SWSUITextureSlot& out) const;
 	void LoadIconRefSlot(CUIXml& xml, LPCSTR path, SWSUITextureSlot& out, LPCSTR icon_attr, LPCSTR raster_attr = "texture", LPCSTR svg_child = "svg") const;
-	void LoadClassIconRef(CUIXml& xml, LPCSTR path, LPCSTR attr, SWSUITextureSlot& out) const;
 	SWSUITextureSlot ResolveIcon(shared_str icon_id) const;
 	SWSUITextureSlot ResolveIconRule(LPCSTR event) const;
 	SWSUITextureSlot MatchSectionPattern(shared_str section, const xr_map<shared_str, shared_str>& patterns) const;
@@ -395,7 +431,6 @@ private:
 	float GetDotDistanceAlpha(float distance, float show_distance) const;
 	float GetMarkerSortScore(u16 id, const SInteractionMarker& marker) const;
 	const SWSUITextureSlot* ResolveKeyBindIcon(int dik, float& out_w, float& out_h) const;
-	void LoadDikIconsLtx();
 	u32 GetItemConditionColor(float condition) const;
 	u32 CountGroupedItemMarkers(const SInteractionMarker& focus_marker) const;
 	float PromptTextWidth(CGameFont* font, LPCSTR text, float kx) const;
@@ -408,7 +443,6 @@ private:
 	void Scan(CActor* actor);
 	void UpdateMarkerPositions(CActor* actor);
 	shared_str EvaluateCategory(CGameObject* obj) const;
-	shared_str ClassifyObjectLegacy(CGameObject* obj) const;
 	bool MatchDetector(CGameObject* obj, const SWSUIClassRule& rule) const;
 	bool IsDoorObject(CGameObject* obj) const;
 	bool HasUsableTip(CGameObject* obj) const;
@@ -420,6 +454,11 @@ private:
 	const SWSUICategoryDef* GetCategory(shared_str category_id) const;
 	float GetCategoryPriorityScore(shared_str category_id) const;
 	bool CategoryHasFeature(shared_str category_id, EWSUICategoryFeature feature) const;
+	bool IsPromptStackCountEnabled(shared_str category_id) const;
+	bool IsPromptConditionEnabled(const SWSUICategoryDef& category) const;
+	bool IsPromptItemCardEnabled(shared_str category_id) const;
+	SWSUITextureSlot ResolveLookupIcons(CGameObject* obj, const SWSUICategoryDef& def) const;
+	SWSUITextureSlot ResolveSpecialIcons(CGameObject* obj, shared_str icon_lookup) const;
 	SWSUITextureSlot ResolveActiveTexture(CGameObject* obj, shared_str category_id, const SWSUICategoryDef& def, bool focused) const;
 	bool ResolveMarkerDef(CGameObject* obj, shared_str category_id, SWSUICategoryDef& out_def, Fvector& out_offset) const;
 	bool GetMarkerWorldPos(CGameObject* obj, shared_str category_id, const SWSUICategoryDef& def, LPCSTR bone_name, const Fvector& offset, Fvector& out) const;
@@ -455,19 +494,8 @@ private:
 	bool m_hide_mute_stalkers = true;
 	bool m_enable_quest_scheme_scan = true;
 	bool m_focus_sound_loaded = false;
-	bool m_categories_from_xml = false;
-	bool m_dik_icons_from_xml = false;
-	u32 m_last_scan_time = 0;
-	Fvector m_scan_actor_pos = {};
-	Fvector m_scan_cam_dir = {};
-	bool m_scan_motion_valid = false;
-
-	u32 m_los_rr_cursor = 0;
-	u32 m_los_rr_order_size = 0;
-	xr_vector<u16> m_los_rr_order;
-	Fvector m_los_cam_pos = {};
-	Fvector m_los_cam_dir = {};
-	bool m_los_cam_valid = false;
+	SWSUIScanState m_scan;
+	SWSUILosCacheState m_los;
 
 	shared_str m_ui_xml;
 	SWSUIMarkersConfig m_markers_cfg;
@@ -483,12 +511,10 @@ private:
 	xr_map<shared_str, shared_str> m_npc_section_patterns;
 	xr_map<shared_str, shared_str> m_usable_section_patterns;
 	xr_map<shared_str, shared_str> m_zone_name_patterns;
-	shared_str m_default_icon_id;
 	xr_map<shared_str, shared_str> m_bones_by_section;
 	xr_map<shared_str, Fvector> m_pos_adj_by_section;
 	xr_map<shared_str, float> m_door_visuals_y;
 	xr_map<shared_str, shared_str> m_npc_roles_by_section;
-	xr_map<shared_str, shared_str> m_usable_textures_by_section;
 	xr_map<shared_str, shared_str> m_zone_textures_by_name;
 	xr_map<shared_str, shared_str> m_zone_prompts_by_name;
 	xr_map<shared_str, shared_str> m_tutorial_prompts_by_name;
@@ -501,22 +527,9 @@ private:
 	float m_svg_cache_ui_scale = -1.f;
 
 	xr_map<u16, SInteractionMarker> m_markers;
-	u16 m_focus_id = 0xffff;
-	u16 m_engine_focus_id = 0xffff;
-	u16 m_wheel_focus_id = 0xffff;
-	u16 m_prev_focus_id = 0xffff;
-	u16 m_popin_focus_id = 0xffff;
-	u32 m_popin_start_time = 0;
-	u16 m_prompt_focus_id = 0xffff;
-	float m_prompt_alpha = 0.f;
-	float m_prompt_fade_start_alpha = 0.f;
-	bool m_prompt_target_visible = false;
-	u32 m_prompt_fade_start_time = 0;
-
-	float m_tutorial_prompt_alpha = 0.f;
-	float m_tutorial_fade_start_alpha = 0.f;
-	bool m_tutorial_target_visible = false;
-	u32 m_tutorial_fade_start_time = 0;
+	SWSUIFocusState m_focus;
+	SWSUIPromptFadeState m_prompt_fade;
+	SWSUITutorialFadeState m_tutorial_fade;
 };
 
 extern CInteractionMarkerManager* g_pInteractionMarkerManager;

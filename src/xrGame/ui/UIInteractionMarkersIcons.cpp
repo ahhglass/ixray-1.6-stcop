@@ -9,11 +9,6 @@
 #include "../../Include/xrRender/SVGTypes.h"
 #include "../../xrUI/ui_base.h"
 
-void CInteractionMarkerManager::LoadIconPatternSection(LPCSTR section_name, xr_map<shared_str, shared_str>& out)
-{
-	LoadTextureLookupSection(section_name, out);
-}
-
 SWSUITextureSlot CInteractionMarkerManager::ResolveIcon(shared_str icon_id) const
 {
 	if (!icon_id.size())
@@ -154,10 +149,6 @@ void CInteractionMarkerManager::PrecacheAllSvgs()
 		PrecacheSvgPath(bg.texture.svg, w, h);
 	};
 
-	precache_bg(m_prompt_cfg.main_panel.background);
-	precache_bg(m_prompt_cfg.item_condition.background);
-	precache_bg(m_prompt_cfg.item_card.background);
-
 	const auto precache_metric = [this](const SWSUIItemCardMetric& metric)
 	{
 		if (!metric.icon.svg.size())
@@ -167,8 +158,17 @@ void CInteractionMarkerManager::PrecacheAllSvgs()
 		PrecacheSvgPath(metric.icon.svg, w, h);
 	};
 
-	precache_metric(m_prompt_cfg.item_card.weight);
-	precache_metric(m_prompt_cfg.item_card.value);
+	precache_bg(m_prompt_cfg.main_panel.background);
+
+	if (m_prompt_cfg.features.item_condition)
+		precache_bg(m_prompt_cfg.item_condition.background);
+
+	if (m_prompt_cfg.features.item_card)
+	{
+		precache_bg(m_prompt_cfg.item_card.background);
+		precache_metric(m_prompt_cfg.item_card.weight);
+		precache_metric(m_prompt_cfg.item_card.value);
+	}
 
 	m_svg_cache_ui_scale = UiScale();
 }

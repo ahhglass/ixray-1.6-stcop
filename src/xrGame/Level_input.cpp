@@ -59,7 +59,7 @@ void CLevel::IR_OnMouseWheel( int direction )
 	if (g_actor) g_actor->callback(GameObject::eMouseWheel)(direction);
 	/* avo: end */
 
-	if (g_pInteractionMarkerManager && g_pInteractionMarkerManager->IsEnabled())
+	if (WSUI_IsActive())
 	{
 		g_pInteractionMarkerManager->OnMouseWheel(direction);
 	}

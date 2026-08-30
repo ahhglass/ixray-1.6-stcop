@@ -52,9 +52,6 @@ float CInteractionMarkerManager::GetCategoryPriorityScore(shared_str category_id
 	if (it != m_category_priority.end())
 		return it->second;
 
-	if (const SWSUICategoryDef* cat = GetCategory(category_id))
-		return cat->priority;
-
 	return 0.f;
 }
 
@@ -64,150 +61,39 @@ bool CInteractionMarkerManager::CategoryHasFeature(shared_str category_id, EWSUI
 	return cat && WSUIInternal::CategoryHasFeature(*cat, feature);
 }
 
+bool CInteractionMarkerManager::IsPromptStackCountEnabled(shared_str category_id) const
+{
+	return m_prompt_cfg.features.item_stack_count
+		&& CategoryHasFeature(category_id, EWSUICategoryFeature::StackCount);
+}
+
+bool CInteractionMarkerManager::IsPromptConditionEnabled(const SWSUICategoryDef& category) const
+{
+	return m_prompt_cfg.features.item_condition
+		&& WSUIInternal::CategoryHasFeature(category, EWSUICategoryFeature::ItemCondition);
+}
+
+bool CInteractionMarkerManager::IsPromptItemCardEnabled(shared_str category_id) const
+{
+	return m_prompt_cfg.features.item_card
+		&& CategoryHasFeature(category_id, EWSUICategoryFeature::ItemCard);
+}
+
 void CInteractionMarkerManager::LoadClassificationRules()
 {
 	m_class_rules.clear();
 
 	if (!pSettings->section_exist("wsui_class_rules"))
-	{
-		BuildDefaultClassificationRules();
 		return;
-	}
 
 	const CInifile::Sect& sect = pSettings->r_section("wsui_class_rules");
-	int order = 0;
 	for (const auto& line : sect.Data)
 	{
 		SWSUIClassRule rule;
-		rule.order = order++;
-
 		WSUIInternal::ParseClassRuleValue(*line.second, rule);
 		if (rule.category_id.size() && rule.detector.size())
-		{
-			m_class_rules.push_back(rule);
-			continue;
-		}
-
-		if (!line.first.size())
-			continue;
-
-		rule.category_id = line.first;
-		rule.detector = nullptr;
-		rule.param = nullptr;
-		rule.flags = 0;
-
-		SWSUIClassRule detector_rule;
-		WSUIInternal::ParseClassRuleValue(*line.second, detector_rule);
-		if (detector_rule.detector.size())
-		{
-			rule.detector = detector_rule.detector;
-			rule.param = detector_rule.param;
-			rule.flags = detector_rule.flags;
-		}
-		else
-		{
-			rule.detector = line.second;
-		}
-
-		if (rule.category_id.size() && rule.detector.size())
 			m_class_rules.push_back(rule);
 	}
-
-	if (m_class_rules.empty())
-		BuildDefaultClassificationRules();
-}
-
-void CInteractionMarkerManager::BuildDefaultClassificationRules()
-{
-	m_class_rules.clear();
-
-	auto add_rule = [this](LPCSTR value, int order)
-	{
-		SWSUIClassRule rule;
-		rule.order = order;
-		WSUIInternal::ParseClassRuleValue(value, rule);
-		if (rule.category_id.size() && rule.detector.size())
-			m_class_rules.push_back(rule);
-	};
-
-	int order = 0;
-	add_rule("stash|inventory_box", order++);
-	add_rule("npc|stalker_alive", order++);
-	add_rule("body|stalker_dead", order++);
-	add_rule("body|monster_dead|require_corpse", order++);
-	add_rule("item|inventory_item|can_take", order++);
-	add_rule("door|door", order++);
-	add_rule("campfire|zone_campfire", order++);
-	add_rule("zone|restrictor_known", order++);
-	add_rule("usable|quest_scheme", order++);
-	add_rule("usable|breakable_box", order++);
-	add_rule("usable|usable_tip", order++);
-}
-
-shared_str CInteractionMarkerManager::ClassifyObjectLegacy(CGameObject* obj) const
-{
-	if (!obj || obj->getDestroy() || !obj->getVisible())
-		return nullptr;
-
-	if (CActor* actor = obj->cast_actor())
-	{
-		if (actor == Actor())
-			return nullptr;
-	}
-
-	if (obj->cast_inventory_box())
-		return "stash";
-
-	if (CAI_Stalker* stalker = obj->cast_stalker())
-	{
-		if (CEntityAlive* alive = stalker->cast_entity_alive())
-		{
-			if (alive->g_Alive())
-				return "npc";
-			return "body";
-		}
-	}
-
-	if (CBaseMonster* monster = obj->cast_base_monster())
-	{
-		if (CEntityAlive* alive = monster->cast_entity_alive())
-		{
-			if (!alive->g_Alive())
-			{
-				if (HasUsableTip(obj))
-					return "usable";
-				if (!ShouldShowMonsterCorpse(obj))
-					return nullptr;
-				return "body";
-			}
-		}
-	}
-
-	if (CInventoryItem* item = obj->cast_inventory_item())
-	{
-		if (item->Useful() && item->CanTake())
-			return "item";
-	}
-
-	if (IsDoorObject(obj))
-		return "door";
-
-	if (obj->cast_zone_campfire())
-		return "campfire";
-
-	if (IsKnownZone(obj))
-		return "zone";
-
-	if (IsQuestSchemeObject(obj))
-		return "usable";
-
-	if (IsBreakableBox(obj))
-		return "usable";
-
-	if (HasUsableTip(obj))
-		return "usable";
-
-	return nullptr;
 }
 
 bool CInteractionMarkerManager::MatchDetector(CGameObject* obj, const SWSUIClassRule& rule) const
@@ -353,17 +239,13 @@ shared_str CInteractionMarkerManager::EvaluateCategory(CGameObject* obj) const
 			return nullptr;
 	}
 
-	if (!m_class_rules.empty())
+	for (const SWSUIClassRule& rule : m_class_rules)
 	{
-		for (const SWSUIClassRule& rule : m_class_rules)
-		{
-			if (MatchDetector(obj, rule))
-				return rule.category_id;
-		}
-		return nullptr;
+		if (MatchDetector(obj, rule))
+			return rule.category_id;
 	}
 
-	return ClassifyObjectLegacy(obj);
+	return nullptr;
 }
 
 bool CInteractionMarkerManager::IsDoorObject(CGameObject* obj) const
@@ -415,11 +297,7 @@ bool CInteractionMarkerManager::IsKnownZone(CGameObject* obj) const
 	if (m_zone_prompts_by_name.find(name) != m_zone_prompts_by_name.end())
 		return true;
 
-	if (!xr_strcmp(obj->cNameSect(), "camp_zone"))
-		return true;
-
-	LPCSTR name_cstr = name.c_str();
-	if (name_cstr && strstr(name_cstr, "_sr_sleep"))
+	if (MatchNamePattern(name, m_zone_name_patterns).HasDrawable())
 		return true;
 
 	return false;
@@ -445,9 +323,6 @@ LPCSTR CInteractionMarkerManager::ResolveZonePrompt(CGameObject* obj) const
 	auto it = m_zone_prompts_by_name.find(obj->cName());
 	if (it != m_zone_prompts_by_name.end())
 		return it->second.c_str();
-
-	if (!xr_strcmp(obj->cNameSect(), "camp_zone") || strstr(obj->cName().c_str(), "_sr_sleep"))
-		return "sleep_zone_tip";
 
 	return nullptr;
 }
@@ -486,7 +361,7 @@ LPCSTR CInteractionMarkerManager::ResolveBoneName(CGameObject* obj, const SWSUIC
 	if (!obj)
 		return nullptr;
 
-	if (WSUIInternal::WsuiCategoryEq(def.pos_mode, "center") || WSUIInternal::WsuiCategoryEq(def.pos_mode, "item"))
+	if (WSUIInternal::WsuiCategoryEq(def.pos_mode, "center"))
 		return nullptr;
 
 	if (WSUIInternal::WsuiCategoryEq(def.pos_mode, "door"))
@@ -559,7 +434,6 @@ bool CInteractionMarkerManager::GetMarkerWorldPos(CGameObject* obj, shared_str c
 
 	const bool use_center =
 		WSUIInternal::WsuiCategoryEq(def.pos_mode, "center") ||
-		WSUIInternal::WsuiCategoryEq(def.pos_mode, "item") ||
 		WSUIInternal::WsuiCategoryEq(def.pos_mode, "zone");
 
 	if (!use_center && bone_name && bone_name[0] && xr_stricmp(bone_name, "nil") != 0)
@@ -580,7 +454,7 @@ bool CInteractionMarkerManager::GetMarkerWorldPos(CGameObject* obj, shared_str c
 
 	obj->Center(out);
 
-	if (WSUIInternal::WsuiCategoryEq(def.pos_mode, "zone") || WSUIInternal::WsuiCategoryEq(category_id, "campfire"))
+	if (WSUIInternal::WsuiCategoryEq(def.pos_mode, "zone"))
 	{
 		Fvector to_viewer;
 		to_viewer.sub(Device.vCameraPosition, out);
@@ -589,7 +463,7 @@ bool CInteractionMarkerManager::GetMarkerWorldPos(CGameObject* obj, shared_str c
 		{
 			to_viewer.mul(1.f / dist);
 			float pull = 0.5f;
-			if (WSUIInternal::WsuiCategoryEq(category_id, "campfire"))
+			if (WSUIInternal::WsuiCategoryEq(def.prompt_mode, "campfire"))
 			{
 				if (CAnomalyZone* zone = obj->cast_anomaly_zone())
 					pull = std::min(zone->Radius() * 0.45f, dist * 0.85f);
@@ -625,58 +499,57 @@ void CInteractionMarkerManager::RefreshMarkerClassifyCache(SInteractionMarker& m
 	marker.los_stale = true;
 }
 
-SWSUITextureSlot CInteractionMarkerManager::ResolveActiveTexture(CGameObject* obj, shared_str category_id, const SWSUICategoryDef& def, bool focused) const
+SWSUITextureSlot CInteractionMarkerManager::ResolveSpecialIcons(CGameObject* obj, shared_str icon_lookup) const
 {
+	if (!obj || !icon_lookup.size())
+		return {};
+
 	auto pickRule = [this](LPCSTR event) -> SWSUITextureSlot
 	{
 		SWSUITextureSlot slot = ResolveIconRule(event);
 		return slot.HasDrawable() ? slot : SWSUITextureSlot{};
 	};
 
-	if (m_markers_cfg.features.special_icons_always && obj)
+	if (WSUIInternal::WsuiCategoryEq(icon_lookup, "item"))
 	{
-		if (WSUIInternal::WsuiCategoryEq(category_id, "item") && IsExplosiveObject(obj))
+		if (IsExplosiveObject(obj))
 		{
 			if (SWSUITextureSlot slot = pickRule("explosive"); slot.HasDrawable())
 				return slot;
 		}
-
-		if (WSUIInternal::WsuiCategoryEq(category_id, "usable"))
-		{
-			if (IsBreakableBox(obj))
-			{
-				if (SWSUITextureSlot slot = pickRule("breakable"); slot.HasDrawable())
-					return slot;
-			}
-			if (IsExplosiveObject(obj))
-			{
-				if (SWSUITextureSlot slot = pickRule("explosive"); slot.HasDrawable())
-					return slot;
-			}
-		}
 	}
-
-	if (!focused)
-		return def.texture;
-
-	if (!obj)
-		return def.active_texture.HasDrawable() ? def.active_texture : def.texture;
-
-	const u16 object_id = obj->ID();
-
-	if (m_markers_cfg.features.enable_task_icons)
+	else if (WSUIInternal::WsuiCategoryEq(icon_lookup, "usable"))
 	{
-		bool is_storyline = false;
-		if (IsTaskTarget(object_id, is_storyline))
+		if (IsBreakableBox(obj))
 		{
-			if (SWSUITextureSlot slot = pickRule(is_storyline ? "task_storyline" : "task_side"); slot.HasDrawable())
+			if (SWSUITextureSlot slot = pickRule("breakable"); slot.HasDrawable())
+				return slot;
+		}
+
+		if (IsExplosiveObject(obj))
+		{
+			if (SWSUITextureSlot slot = pickRule("explosive"); slot.HasDrawable())
 				return slot;
 		}
 	}
 
+	return {};
+}
+
+SWSUITextureSlot CInteractionMarkerManager::ResolveLookupIcons(CGameObject* obj, const SWSUICategoryDef& def) const
+{
+	if (!obj || !def.icon_lookup.size())
+		return {};
+
+	auto pickRule = [this](LPCSTR event) -> SWSUITextureSlot
+	{
+		SWSUITextureSlot slot = ResolveIconRule(event);
+		return slot.HasDrawable() ? slot : SWSUITextureSlot{};
+	};
+
 	const shared_str section = obj->cNameSect();
 
-	if (WSUIInternal::WsuiCategoryEq(category_id, "npc"))
+	if (WSUIInternal::WsuiCategoryEq(def.icon_lookup, "npc"))
 	{
 		if (CAI_Stalker* stalker = obj->cast_stalker())
 		{
@@ -696,7 +569,7 @@ SWSUITextureSlot CInteractionMarkerManager::ResolveActiveTexture(CGameObject* ob
 		if (SWSUITextureSlot slot = MatchSectionPattern(section, m_npc_section_patterns); slot.HasDrawable())
 			return slot;
 	}
-	else if (WSUIInternal::WsuiCategoryEq(category_id, "body"))
+	else if (WSUIInternal::WsuiCategoryEq(def.icon_lookup, "body"))
 	{
 		if (obj->cast_base_monster() && !obj->cast_stalker())
 		{
@@ -704,44 +577,18 @@ SWSUITextureSlot CInteractionMarkerManager::ResolveActiveTexture(CGameObject* ob
 				return slot;
 		}
 	}
-	else if (WSUIInternal::WsuiCategoryEq(category_id, "item"))
+	else if (WSUIInternal::WsuiCategoryEq(def.icon_lookup, "usable"))
 	{
-		if (IsExplosiveObject(obj))
-		{
-			if (SWSUITextureSlot slot = pickRule("explosive"); slot.HasDrawable())
-				return slot;
-		}
-	}
-	else if (WSUIInternal::WsuiCategoryEq(category_id, "usable"))
-	{
-		if (IsBreakableBox(obj))
-		{
-			if (SWSUITextureSlot slot = pickRule("breakable"); slot.HasDrawable())
-				return slot;
-		}
-
-		if (IsExplosiveObject(obj))
-		{
-			if (SWSUITextureSlot slot = pickRule("explosive"); slot.HasDrawable())
-				return slot;
-		}
-
 		if (IsQuestSchemeObject(obj))
 		{
 			if (SWSUITextureSlot slot = pickRule("quest_scheme_usable"); slot.HasDrawable())
 				return slot;
 		}
 
-		if (const auto tex_it = m_usable_textures_by_section.find(section); tex_it != m_usable_textures_by_section.end())
-		{
-			if (SWSUITextureSlot slot = ResolveIcon(tex_it->second); slot.HasDrawable())
-				return slot;
-		}
-
 		if (SWSUITextureSlot slot = MatchSectionPattern(section, m_usable_section_patterns); slot.HasDrawable())
 			return slot;
 	}
-	else if (WSUIInternal::WsuiCategoryEq(category_id, "zone"))
+	else if (WSUIInternal::WsuiCategoryEq(def.icon_lookup, "zone"))
 	{
 		if (const auto tex_it = m_zone_textures_by_name.find(obj->cName()); tex_it != m_zone_textures_by_name.end())
 		{
@@ -758,6 +605,47 @@ SWSUITextureSlot CInteractionMarkerManager::ResolveActiveTexture(CGameObject* ob
 				return slot;
 		}
 	}
+
+	return {};
+}
+
+SWSUITextureSlot CInteractionMarkerManager::ResolveActiveTexture(CGameObject* obj, shared_str category_id, const SWSUICategoryDef& def, bool focused) const
+{
+	(void)category_id;
+
+	if (m_markers_cfg.features.special_icons_always && obj && def.icon_lookup.size())
+	{
+		if (SWSUITextureSlot slot = ResolveSpecialIcons(obj, def.icon_lookup); slot.HasDrawable())
+			return slot;
+	}
+
+	if (!focused)
+		return def.texture;
+
+	if (!obj)
+		return def.active_texture.HasDrawable() ? def.active_texture : def.texture;
+
+	auto pickRule = [this](LPCSTR event) -> SWSUITextureSlot
+	{
+		SWSUITextureSlot slot = ResolveIconRule(event);
+		return slot.HasDrawable() ? slot : SWSUITextureSlot{};
+	};
+
+	if (m_markers_cfg.features.enable_task_icons)
+	{
+		bool is_storyline = false;
+		if (IsTaskTarget(obj->ID(), is_storyline))
+		{
+			if (SWSUITextureSlot slot = pickRule(is_storyline ? "task_storyline" : "task_side"); slot.HasDrawable())
+				return slot;
+		}
+	}
+
+	if (SWSUITextureSlot slot = ResolveSpecialIcons(obj, def.icon_lookup); slot.HasDrawable())
+		return slot;
+
+	if (SWSUITextureSlot slot = ResolveLookupIcons(obj, def); slot.HasDrawable())
+		return slot;
 
 	return def.active_texture.HasDrawable() ? def.active_texture : def.texture;
 }

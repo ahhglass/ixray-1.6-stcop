@@ -102,25 +102,20 @@ bool CInteractionMarkerManager::IsRuntimeEnabled() const
 	return m_enabled;
 }
 
-bool CInteractionMarkerManager::IsEnabled()
-{
-	return WSUI_IsActive();
-}
-
 void CInteractionMarkerManager::ClearMarkerState()
 {
 	m_markers.clear();
-	m_los_rr_order.clear();
-	m_los_rr_cursor = 0;
-	m_los_rr_order_size = 0;
-	m_focus_id = 0xffff;
-	m_engine_focus_id = 0xffff;
-	m_wheel_focus_id = 0xffff;
-	m_prev_focus_id = 0xffff;
-	m_popin_focus_id = 0xffff;
-	m_prompt_focus_id = 0xffff;
-	m_prompt_alpha = 0.f;
-	m_tutorial_prompt_alpha = 0.f;
+	m_los.rr_order.clear();
+	m_los.rr_cursor = 0;
+	m_los.rr_order_size = 0;
+	m_focus.focus_id = 0xffff;
+	m_focus.engine_focus_id = 0xffff;
+	m_focus.wheel_focus_id = 0xffff;
+	m_focus.prev_focus_id = 0xffff;
+	m_focus.popin_focus_id = 0xffff;
+	m_focus.prompt_focus_id = 0xffff;
+	m_prompt_fade.alpha = 0.f;
+	m_tutorial_fade.alpha = 0.f;
 }
 
 void CInteractionMarkerManager::SetScriptEnabled(bool enabled)
@@ -140,6 +135,7 @@ bool CInteractionMarkerManager::GetScriptBool(LPCSTR key) const
 		return false;
 
 	if (!xr_strcmp(key, "hide_dots")) return m_markers_cfg.features.hide_dots;
+	if (!xr_strcmp(key, "special_icons_always")) return m_markers_cfg.features.special_icons_always;
 	if (!xr_strcmp(key, "wheel_cycle_pickups")) return m_markers_cfg.features.wheel_cycle_pickups;
 	if (!xr_strcmp(key, "enable_task_icons")) return m_markers_cfg.features.enable_task_icons;
 	if (!xr_strcmp(key, "enable_focus_sound")) return m_markers_cfg.features.enable_focus_sound;
@@ -157,6 +153,7 @@ void CInteractionMarkerManager::SetScriptBool(LPCSTR key, bool value)
 		return;
 
 	if (!xr_strcmp(key, "hide_dots")) m_markers_cfg.features.hide_dots = value;
+	else if (!xr_strcmp(key, "special_icons_always")) m_markers_cfg.features.special_icons_always = value;
 	else if (!xr_strcmp(key, "wheel_cycle_pickups")) m_markers_cfg.features.wheel_cycle_pickups = value;
 	else if (!xr_strcmp(key, "enable_task_icons")) m_markers_cfg.features.enable_task_icons = value;
 	else if (!xr_strcmp(key, "enable_focus_sound")) m_markers_cfg.features.enable_focus_sound = value;
@@ -164,6 +161,9 @@ void CInteractionMarkerManager::SetScriptBool(LPCSTR key, bool value)
 	else if (!xr_strcmp(key, "item_condition")) m_prompt_cfg.features.item_condition = value;
 	else if (!xr_strcmp(key, "item_card")) m_prompt_cfg.features.item_card = value;
 	else if (!xr_strcmp(key, "keybind")) m_prompt_cfg.features.keybind = value;
+
+	if (!xr_strcmp(key, "item_condition") || !xr_strcmp(key, "item_card"))
+		InvalidateSvgCache();
 }
 
 bool CInteractionMarkerManager::ShouldSuppressTutorialUiWhenActive() const
@@ -177,11 +177,20 @@ bool CInteractionMarkerManager::ShouldSuppressTutorialUiWhenActive() const
 
 bool CInteractionMarkerManager::ShouldSuppressNpcNameAtDistance(float distance) const
 {
-	const SWSUICategoryDef* def = GetCategory("npc");
-	if (!def || !def->enabled)
-		return false;
+	for (const auto& [id, def] : m_categories)
+	{
+		(void)id;
+		if (!def.enabled)
+			continue;
 
-	return distance <= def->show_distance;
+		if (!WSUIInternal::CategoryHasFeature(def, EWSUICategoryFeature::SuppressVanillaName))
+			continue;
+
+		if (distance <= def.show_distance)
+			return true;
+	}
+
+	return false;
 }
 
 void CInteractionMarkerManager::EnsureQuestSchemeIndex()
@@ -197,18 +206,15 @@ void CInteractionMarkerManager::Load()
 {
 	m_enabled = false;
 	m_markers.clear();
-	m_los_rr_order.clear();
-	m_los_rr_cursor = 0;
-	m_los_rr_order_size = 0;
-	m_los_cam_valid = false;
-	m_scan_motion_valid = false;
-	m_categories_from_xml = false;
-	m_dik_icons_from_xml = false;
+	m_los.rr_order.clear();
+	m_los.rr_cursor = 0;
+	m_los.rr_order_size = 0;
+	m_los.cam_valid = false;
+	m_scan.motion_valid = false;
 	m_bones_by_section.clear();
 	m_pos_adj_by_section.clear();
 	m_door_visuals_y.clear();
 	m_npc_roles_by_section.clear();
-	m_usable_textures_by_section.clear();
 	m_zone_textures_by_name.clear();
 	m_zone_prompts_by_name.clear();
 	m_tutorial_prompts_by_name.clear();
@@ -217,20 +223,19 @@ void CInteractionMarkerManager::Load()
 	m_npc_section_patterns.clear();
 	m_usable_section_patterns.clear();
 	m_zone_name_patterns.clear();
-	m_default_icon_id = nullptr;
 	m_categories.clear();
 	m_category_priority.clear();
 	m_class_rules.clear();
 	m_quest_scheme_stories.clear();
 	m_breakable_box_visuals.clear();
 	m_bone_priority.clear();
-	m_focus_id = 0xffff;
+	m_focus.focus_id = 0xffff;
 	HUD_SOUND_ITEM::DestroySound(m_focus_snd);
 	m_focus_sound_loaded = false;
 	m_markers_cfg = {};
 	m_prompt_cfg = {};
-	m_wheel_focus_id = 0xffff;
-	m_engine_focus_id = 0xffff;
+	m_focus.wheel_focus_id = 0xffff;
+	m_focus.engine_focus_id = 0xffff;
 	m_dik_icons.clear();
 	m_config_loaded = false;
 	m_script_enabled_override = -1;
@@ -241,30 +246,29 @@ void CInteractionMarkerManager::Load()
 
 	m_enabled = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enabled", false);
 	m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "ui_xml", nullptr);
-	if (!m_ui_xml.size())
-		m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "prompt_ui_xml", "ui_wsui.xml");
 	m_hide_mute_stalkers = READ_IF_EXISTS(pSettings, r_bool, "wsui", "hide_mute_stalkers", true);
 	m_suppress_tutorial_ui = READ_IF_EXISTS(pSettings, r_bool, "wsui", "suppress_tutorial_ui", true);
 	m_enable_quest_scheme_scan = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_quest_scheme_scan", true);
 	LoadWsuiXml();
 	LoadFocusSound();
-	if (!m_dik_icons_from_xml)
-		LoadDikIconsLtx();
-	if (!m_categories_from_xml)
-		LoadClassDefs();
 	LoadBonePriority();
 	LoadLookupSection("bones_by_section", false);
 	LoadLookupSection("pos_adj_by_section", true);
 	LoadFloatLookupSection("door_visuals", m_door_visuals_y);
 	LoadTextureLookupSection("npc_roles_by_section", m_npc_roles_by_section);
-	LoadTextureLookupSection("usable_textures_by_section", m_usable_textures_by_section);
 	LoadTextureLookupSection("zone_textures_by_name", m_zone_textures_by_name);
 	LoadTextureLookupSection("zone_prompts_by_name", m_zone_prompts_by_name);
 	LoadTextureLookupSection("tutorial_prompts_by_name", m_tutorial_prompts_by_name);
-	LoadIconPatternSection("npc_section_contains", m_npc_section_patterns);
-	LoadIconPatternSection("usable_section_contains", m_usable_section_patterns);
-	LoadIconPatternSection("zone_name_contains", m_zone_name_patterns);
+	LoadTextureLookupSection("npc_section_contains", m_npc_section_patterns);
+	LoadTextureLookupSection("usable_section_contains", m_usable_section_patterns);
+	LoadTextureLookupSection("zone_name_contains", m_zone_name_patterns);
 	LoadClassificationRules();
+
+	if (m_enabled && m_categories.empty())
+		Msg("! [wsui] marker_categories missing or empty in %s", m_ui_xml.c_str());
+
+	if (m_enabled && m_class_rules.empty())
+		Msg("! [wsui] wsui_class_rules missing or empty");
 
 	if (pSettings->section_exist("breakable_box_visuals"))
 	{
@@ -518,19 +522,19 @@ Fvector2 CInteractionMarkerManager::WorldToScreen(const Fvector& world_pos, bool
 
 void CInteractionMarkerManager::RebuildLosRoundRobinOrder()
 {
-	m_los_rr_order.clear();
-	m_los_rr_order.reserve(m_markers.size());
+	m_los.rr_order.clear();
+	m_los.rr_order.reserve(m_markers.size());
 
 	for (const auto& [id, marker] : m_markers)
 	{
 		VERIFY(id == marker.object_id);
-		m_los_rr_order.push_back(id);
+		m_los.rr_order.push_back(id);
 	}
 
-	if (m_los_rr_order.size() != m_los_rr_order_size)
+	if (m_los.rr_order.size() != m_los.rr_order_size)
 	{
-		m_los_rr_cursor = 0;
-		m_los_rr_order_size = m_los_rr_order.size();
+		m_los.rr_cursor = 0;
+		m_los.rr_order_size = m_los.rr_order.size();
 	}
 }
 
@@ -590,7 +594,7 @@ void CInteractionMarkerManager::Scan(CActor* actor)
 		if (!category_id.size())
 			continue;
 
-		if (WSUIInternal::WsuiCategoryEq(category_id, "npc") && m_hide_mute_stalkers)
+		if (m_hide_mute_stalkers && CategoryHasFeature(category_id, EWSUICategoryFeature::HideIfMute))
 		{
 			if (CInventoryOwner* owner = game_object->cast_inventory_owner())
 			{
@@ -624,7 +628,6 @@ void CInteractionMarkerManager::Scan(CActor* actor)
 		if (is_new)
 		{
 			marker.screen_pos.set(-1.f, -1.f);
-			marker.target_screen_pos.set(-1.f, -1.f);
 			marker.los_has_result = false;
 			marker.los_stale = true;
 		}
@@ -644,26 +647,25 @@ void CInteractionMarkerManager::Scan(CActor* actor)
 
 void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 {
-	m_engine_focus_id = 0xffff;
-	m_focus_id = 0xffff;
+	m_focus.engine_focus_id = 0xffff;
+	m_focus.focus_id = 0xffff;
 
 	CGameObject* focus_object = actor ? actor->ObjectWeLookingAt() : nullptr;
 	if (focus_object)
-		m_engine_focus_id = focus_object->ID();
+		m_focus.engine_focus_id = focus_object->ID();
 
-	if (m_markers_cfg.features.wheel_cycle_pickups && m_wheel_focus_id != 0xffff)
+	if (m_markers_cfg.features.wheel_cycle_pickups && m_focus.wheel_focus_id != 0xffff)
 	{
-		auto wheel_it = m_markers.find(m_wheel_focus_id);
+		auto wheel_it = m_markers.find(m_focus.wheel_focus_id);
 		if (wheel_it != m_markers.end() &&
-			(WSUIInternal::WsuiCategoryEq(wheel_it->second.category_id, "item") ||
-				CategoryHasFeature(wheel_it->second.category_id, EWSUICategoryFeature::WheelCycle)))
-			m_focus_id = m_wheel_focus_id;
+			CategoryHasFeature(wheel_it->second.category_id, EWSUICategoryFeature::WheelCycle))
+			m_focus.focus_id = m_focus.wheel_focus_id;
 		else
-			m_wheel_focus_id = 0xffff;
+			m_focus.wheel_focus_id = 0xffff;
 	}
 
-	if (m_focus_id == 0xffff)
-		m_focus_id = m_engine_focus_id;
+	if (m_focus.focus_id == 0xffff)
+		m_focus.focus_id = m_focus.engine_focus_id;
 
 	const u32 now = Device.dwTimeGlobal;
 	const Fvector& cam_pos = Device.vCameraPosition;
@@ -674,37 +676,37 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 	const float los_dir_eps = los.camera_dir_eps > 0.f ? los.camera_dir_eps : 0.001f;
 
 	bool invalidate_los = false;
-	if (!m_los_cam_valid)
+	if (!m_los.cam_valid)
 	{
 		invalidate_los = true;
-		m_los_cam_valid = true;
+		m_los.cam_valid = true;
 	}
 	else
 	{
-		if (m_los_cam_pos.distance_to_sqr(cam_pos) > los_pos_eps * los_pos_eps)
+		if (m_los.cam_pos.distance_to_sqr(cam_pos) > los_pos_eps * los_pos_eps)
 			invalidate_los = true;
-		else if (1.f - m_los_cam_dir.dotproduct(cam_dir) > los_dir_eps)
+		else if (1.f - m_los.cam_dir.dotproduct(cam_dir) > los_dir_eps)
 			invalidate_los = true;
 	}
 
 	if (invalidate_los)
 	{
 		MarkLosCachesStale();
-		m_los_cam_pos = cam_pos;
-		m_los_cam_dir = cam_dir;
+		m_los.cam_pos = cam_pos;
+		m_los.cam_dir = cam_dir;
 	}
 
 	xr_set<u16> los_check_ids;
-	if (!m_los_rr_order.empty())
+	if (!m_los.rr_order.empty())
 	{
-		const u32 order_size = m_los_rr_order.size();
+		const u32 order_size = m_los.rr_order.size();
 		const u32 checks = std::min(los.checks_per_frame > 0 ? los.checks_per_frame : 2u, order_size);
 		for (u32 i = 0; i < checks; ++i)
 		{
-			const u32 idx = (m_los_rr_cursor + i) % order_size;
-			los_check_ids.insert(m_los_rr_order[idx]);
+			const u32 idx = (m_los.rr_cursor + i) % order_size;
+			los_check_ids.insert(m_los.rr_order[idx]);
 		}
-		m_los_rr_cursor = (m_los_rr_cursor + checks) % order_size;
+		m_los.rr_cursor = (m_los.rr_cursor + checks) % order_size;
 	}
 
 	const float lerp_factor = clampr(m_markers_cfg.dot.lerp_speed * Device.fTimeDelta * 60.f, 0.f, 1.f);
@@ -744,9 +746,9 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 		if (distance > def.show_distance)
 			continue;
 
-		const bool is_focus = id == m_focus_id;
+		const bool is_focus = id == m_focus.focus_id;
 		bool inside_volume = false;
-		if (WSUIInternal::WsuiCategoryEq(marker.category_id, "zone"))
+		if (WSUIInternal::WsuiCategoryEq(def.pos_mode, "zone"))
 		{
 			if (CSpaceRestrictor* restrictor = game_object->cast_restrictor())
 			{
@@ -755,11 +757,10 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 				probe.R = 0.25f;
 				inside_volume = restrictor->inside(probe);
 			}
-		}
-		else if (WSUIInternal::WsuiCategoryEq(marker.category_id, "campfire"))
-		{
-			if (CAnomalyZone* zone = game_object->cast_anomaly_zone())
+			else if (CAnomalyZone* zone = game_object->cast_anomaly_zone())
+			{
 				inside_volume = actor->Position().distance_to(zone->Position()) <= zone->Radius();
+			}
 		}
 
 		if (inside_volume)
@@ -794,8 +795,6 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 		Fvector2 target = WorldToScreen(world_pos, is_focus || inside_volume);
 		if (target.x < 0.f)
 			continue;
-
-		marker.target_screen_pos = target;
 
 		if (marker.screen_pos.x < 0.f || marker.screen_pos.y < 0.f)
 			marker.screen_pos = target;
@@ -840,8 +839,8 @@ void CInteractionMarkerManager::ApplyMarkerLimit(CActor* actor)
 	for (u32 i = 0; i < m_markers_cfg.scan.max_markers; ++i)
 		keep_ids.insert(ranked[i].second);
 
-	if (m_focus_id != 0xffff)
-		keep_ids.insert(m_focus_id);
+	if (m_focus.focus_id != 0xffff)
+		keep_ids.insert(m_focus.focus_id);
 
 	for (auto& [id, marker] : m_markers)
 	{
@@ -864,7 +863,7 @@ float CInteractionMarkerManager::GetMarkerSortScore(u16 id, const SInteractionMa
 			score += m_markers_cfg.marker_priority.task;
 	}
 
-	if (id == m_focus_id)
+	if (id == m_focus.focus_id)
 		score += m_markers_cfg.marker_priority.focus;
 
 	score += GetCategoryPriorityScore(marker.category_id);
@@ -1017,11 +1016,11 @@ void CInteractionMarkerManager::UpdateTutorialPromptFade()
 	LPCSTR tutorial_name = GetActiveTutorialName();
 	const bool want = tutorial_name && HasTutorialPromptMapping(tutorial_name);
 
-	if (want != m_tutorial_target_visible)
+	if (want != m_tutorial_fade.target_visible)
 	{
-		m_tutorial_target_visible = want;
-		m_tutorial_fade_start_time = Device.dwTimeGlobal;
-		m_tutorial_fade_start_alpha = m_tutorial_prompt_alpha;
+		m_tutorial_fade.target_visible = want;
+		m_tutorial_fade.fade_start_time = Device.dwTimeGlobal;
+		m_tutorial_fade.fade_start_alpha = m_tutorial_fade.alpha;
 	}
 
 	const u32 fade_dur = want ? m_prompt_cfg.fade_animation.fade_in_ms : m_prompt_cfg.fade_animation.fade_out_ms;
@@ -1029,16 +1028,16 @@ void CInteractionMarkerManager::UpdateTutorialPromptFade()
 
 	if (!fade_dur)
 	{
-		m_tutorial_prompt_alpha = target;
+		m_tutorial_fade.alpha = target;
 		return;
 	}
 
-	float t = float(Device.dwTimeGlobal - m_tutorial_fade_start_time) / float(fade_dur);
+	float t = float(Device.dwTimeGlobal - m_tutorial_fade.fade_start_time) / float(fade_dur);
 	t = clampr(t, 0.f, 1.f);
-	m_tutorial_prompt_alpha = m_tutorial_fade_start_alpha + (target - m_tutorial_fade_start_alpha) * t;
+	m_tutorial_fade.alpha = m_tutorial_fade.fade_start_alpha + (target - m_tutorial_fade.fade_start_alpha) * t;
 
-	if (!want && m_tutorial_prompt_alpha <= 0.01f)
-		m_tutorial_prompt_alpha = 0.f;
+	if (!want && m_tutorial_fade.alpha <= 0.01f)
+		m_tutorial_fade.alpha = 0.f;
 }
 
 float CInteractionMarkerManager::GetDotDistanceScale(float distance, float show_distance) const
@@ -1072,7 +1071,7 @@ void CInteractionMarkerManager::OnMouseWheel(int direction)
 
 	for (const auto& [id, marker] : m_markers)
 	{
-		if (!WSUIInternal::WsuiCategoryEq(marker.category_id, "item") || !marker.visible || !marker.reachable)
+		if (!CategoryHasFeature(marker.category_id, EWSUICategoryFeature::WheelCycle) || !marker.visible || !marker.reachable)
 			continue;
 		items.emplace_back(marker.distance, id);
 	}
@@ -1087,9 +1086,9 @@ void CInteractionMarkerManager::OnMouseWheel(int direction)
 		return a.second < b.second;
 	});
 
-	u16 current = m_wheel_focus_id;
+	u16 current = m_focus.wheel_focus_id;
 	if (current == 0xffff)
-		current = m_engine_focus_id;
+		current = m_focus.engine_focus_id;
 
 	int index = -1;
 	for (u32 i = 0; i < items.size(); ++i)
@@ -1108,7 +1107,7 @@ void CInteractionMarkerManager::OnMouseWheel(int direction)
 	else
 		index = (index - 1 + (int)items.size()) % (int)items.size();
 
-	m_wheel_focus_id = items[index].second;
+	m_focus.wheel_focus_id = items[index].second;
 }
 
 bool CInteractionMarkerManager::IsScanEnvironmentMoving(CActor* actor) const
@@ -1116,17 +1115,17 @@ bool CInteractionMarkerManager::IsScanEnvironmentMoving(CActor* actor) const
 	if (!actor)
 		return true;
 
-	if (!m_scan_motion_valid)
+	if (!m_scan.motion_valid)
 		return true;
 
 	const auto& scan = m_markers_cfg.scan;
 	const float actor_eps = scan.actor_pos_eps > 0.f ? scan.actor_pos_eps : m_markers_cfg.los_cache.camera_pos_eps;
 	const float cam_eps = scan.camera_dir_eps > 0.f ? scan.camera_dir_eps : m_markers_cfg.los_cache.camera_dir_eps;
 
-	if (m_scan_actor_pos.distance_to_sqr(actor->Position()) > actor_eps * actor_eps)
+	if (m_scan.actor_pos.distance_to_sqr(actor->Position()) > actor_eps * actor_eps)
 		return true;
 
-	if (1.f - m_scan_cam_dir.dotproduct(Device.vCameraDirection) > cam_eps)
+	if (1.f - m_scan.cam_dir.dotproduct(Device.vCameraDirection) > cam_eps)
 		return true;
 
 	return false;
@@ -1156,28 +1155,28 @@ void CInteractionMarkerManager::Update()
 	if (ShouldHideUI())
 	{
 		m_markers.clear();
-		m_focus_id = 0xffff;
-		m_engine_focus_id = 0xffff;
-		m_wheel_focus_id = 0xffff;
-		m_prev_focus_id = 0xffff;
-		m_popin_focus_id = 0xffff;
-		m_prompt_focus_id = 0xffff;
-		m_prompt_alpha = 0.f;
-		m_prompt_target_visible = false;
-		m_scan_motion_valid = false;
+		m_focus.focus_id = 0xffff;
+		m_focus.engine_focus_id = 0xffff;
+		m_focus.wheel_focus_id = 0xffff;
+		m_focus.prev_focus_id = 0xffff;
+		m_focus.popin_focus_id = 0xffff;
+		m_focus.prompt_focus_id = 0xffff;
+		m_prompt_fade.alpha = 0.f;
+		m_prompt_fade.target_visible = false;
+		m_scan.motion_valid = false;
 		return;
 	}
 
 	const u32 now = Device.dwTimeGlobal;
 	const bool environment_moving = IsScanEnvironmentMoving(g_actor);
 	const u32 scan_interval = GetEffectiveScanIntervalMs(g_actor);
-	if (!ShouldSuspendScan() && (environment_moving || now - m_last_scan_time >= scan_interval))
+	if (!ShouldSuspendScan() && (environment_moving || now - m_scan.last_scan_time >= scan_interval))
 	{
 		Scan(g_actor);
-		m_last_scan_time = now;
-		m_scan_actor_pos = g_actor->Position();
-		m_scan_cam_dir = Device.vCameraDirection;
-		m_scan_motion_valid = true;
+		m_scan.last_scan_time = now;
+		m_scan.actor_pos = g_actor->Position();
+		m_scan.cam_dir = Device.vCameraDirection;
+		m_scan.motion_valid = true;
 	}
 
 	if (!ShouldSuspendMarkLoop())
@@ -1189,10 +1188,10 @@ void CInteractionMarkerManager::Update()
 
 bool CInteractionMarkerManager::WantsPromptVisible(CActor* actor) const
 {
-	if (!actor || m_focus_id == 0xffff)
+	if (!actor || m_focus.focus_id == 0xffff)
 		return false;
 
-	auto it = m_markers.find(m_focus_id);
+	auto it = m_markers.find(m_focus.focus_id);
 	if (it == m_markers.end())
 		return false;
 
@@ -1201,9 +1200,7 @@ bool CInteractionMarkerManager::WantsPromptVisible(CActor* actor) const
 		return false;
 
 	if (m_suppress_tutorial_ui &&
-		(CategoryHasFeature(marker.category_id, EWSUICategoryFeature::SuppressTutorial) ||
-			WSUIInternal::WsuiCategoryEq(marker.category_id, "zone") ||
-			WSUIInternal::WsuiCategoryEq(marker.category_id, "campfire")))
+		CategoryHasFeature(marker.category_id, EWSUICategoryFeature::SuppressTutorial))
 	{
 		if (LPCSTR tutorial_name = GetActiveTutorialName())
 		{
@@ -1220,46 +1217,46 @@ void CInteractionMarkerManager::UpdatePromptFade(CActor* actor)
 {
 	const bool want = WantsPromptVisible(actor);
 
-	if (want != m_prompt_target_visible)
+	if (want != m_prompt_fade.target_visible)
 	{
-		m_prompt_target_visible = want;
-		m_prompt_fade_start_time = Device.dwTimeGlobal;
-		m_prompt_fade_start_alpha = m_prompt_alpha;
+		m_prompt_fade.target_visible = want;
+		m_prompt_fade.fade_start_time = Device.dwTimeGlobal;
+		m_prompt_fade.fade_start_alpha = m_prompt_fade.alpha;
 		if (want)
-			m_prompt_focus_id = m_focus_id;
+			m_focus.prompt_focus_id = m_focus.focus_id;
 	}
 
 	if (want)
-		m_prompt_focus_id = m_focus_id;
+		m_focus.prompt_focus_id = m_focus.focus_id;
 
 	const u32 fade_dur = want ? m_prompt_cfg.fade_animation.fade_in_ms : m_prompt_cfg.fade_animation.fade_out_ms;
 	const float target = want ? 1.f : 0.f;
 
 	if (!fade_dur)
 	{
-		m_prompt_alpha = target;
+		m_prompt_fade.alpha = target;
 		if (!want)
-			m_prompt_focus_id = 0xffff;
+			m_focus.prompt_focus_id = 0xffff;
 		return;
 	}
 
-	float t = float(Device.dwTimeGlobal - m_prompt_fade_start_time) / float(fade_dur);
+	float t = float(Device.dwTimeGlobal - m_prompt_fade.fade_start_time) / float(fade_dur);
 	t = clampr(t, 0.f, 1.f);
-	m_prompt_alpha = m_prompt_fade_start_alpha + (target - m_prompt_fade_start_alpha) * t;
+	m_prompt_fade.alpha = m_prompt_fade.fade_start_alpha + (target - m_prompt_fade.fade_start_alpha) * t;
 
-	if (!want && m_prompt_alpha <= 0.01f)
+	if (!want && m_prompt_fade.alpha <= 0.01f)
 	{
-		m_prompt_alpha = 0.f;
-		m_prompt_focus_id = 0xffff;
+		m_prompt_fade.alpha = 0.f;
+		m_focus.prompt_focus_id = 0xffff;
 	}
 }
 
 float CInteractionMarkerManager::GetFocusPopinScale() const
 {
-	if (!m_markers_cfg.popin_animation.duration_ms || m_focus_id == 0xffff || m_popin_focus_id != m_focus_id)
+	if (!m_markers_cfg.popin_animation.duration_ms || m_focus.focus_id == 0xffff || m_focus.popin_focus_id != m_focus.focus_id)
 		return 1.f;
 
-	const float elapsed = float(Device.dwTimeGlobal - m_popin_start_time);
+	const float elapsed = float(Device.dwTimeGlobal - m_focus.popin_start_time);
 	const float t = elapsed / float(m_markers_cfg.popin_animation.duration_ms);
 	if (t >= 1.f)
 		return 1.f;
@@ -1281,10 +1278,10 @@ void CInteractionMarkerManager::UpdateFocusSound(CActor* actor)
 	if (!m_markers_cfg.features.enable_focus_sound || !m_focus_sound_loaded || !actor || ShouldHideUI())
 		return;
 
-	if (m_focus_id == 0xffff || m_focus_id == m_prev_focus_id)
+	if (m_focus.focus_id == 0xffff || m_focus.focus_id == m_focus.prev_focus_id)
 		return;
 
-	auto it = m_markers.find(m_focus_id);
+	auto it = m_markers.find(m_focus.focus_id);
 	if (it == m_markers.end() || !it->second.visible || !it->second.reachable)
 		return;
 
@@ -1300,17 +1297,17 @@ void CInteractionMarkerManager::UpdateFocusSound(CActor* actor)
 
 void CInteractionMarkerManager::UpdateAnimations(CActor* actor)
 {
-	if (m_focus_id != m_prev_focus_id)
+	if (m_focus.focus_id != m_focus.prev_focus_id)
 		UpdateFocusSound(actor);
 
-	if (m_focus_id != m_prev_focus_id)
+	if (m_focus.focus_id != m_focus.prev_focus_id)
 	{
-		if (m_focus_id != 0xffff && m_markers_cfg.popin_animation.duration_ms > 0)
+		if (m_focus.focus_id != 0xffff && m_markers_cfg.popin_animation.duration_ms > 0)
 		{
-			m_popin_focus_id = m_focus_id;
-			m_popin_start_time = Device.dwTimeGlobal;
+			m_focus.popin_focus_id = m_focus.focus_id;
+			m_focus.popin_start_time = Device.dwTimeGlobal;
 		}
-		m_prev_focus_id = m_focus_id;
+		m_focus.prev_focus_id = m_focus.focus_id;
 	}
 
 	UpdatePromptFade(actor);
@@ -1340,7 +1337,7 @@ void CInteractionMarkerManager::OnRender()
 				continue;
 
 			const SWSUICategoryDef& def = marker.cached_def;
-			const bool focused = id == m_focus_id;
+			const bool focused = id == m_focus.focus_id;
 			const float popin_scale = focused ? GetFocusPopinScale() : 1.f;
 			const float dist_scale = GetDotDistanceScale(marker.distance, def.show_distance);
 			const float dot_w = m_markers_cfg.dot.size * UiScale() * popin_scale * dist_scale;

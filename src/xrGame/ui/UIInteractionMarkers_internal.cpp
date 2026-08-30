@@ -102,6 +102,10 @@ namespace WSUIInternal
 				flags |= static_cast<u32>(EWSUICategoryFeature::WheelCycle);
 			else if (!xr_stricmp(token, "suppress_tutorial"))
 				flags |= static_cast<u32>(EWSUICategoryFeature::SuppressTutorial);
+			else if (!xr_stricmp(token, "hide_if_mute"))
+				flags |= static_cast<u32>(EWSUICategoryFeature::HideIfMute);
+			else if (!xr_stricmp(token, "suppress_vanilla_name"))
+				flags |= static_cast<u32>(EWSUICategoryFeature::SuppressVanillaName);
 		}
 
 		return flags;
@@ -184,63 +188,5 @@ namespace WSUIInternal
 
 		if (start != str)
 			memmove(str, start, xr_strlen(start) + 1);
-	}
-
-	void ApplyDefaultCategoryBehavior(SWSUICategoryDef& def, shared_str category_id)
-	{
-		if (!def.pos_mode.size())
-		{
-			if (WsuiCategoryEq(category_id, "door"))
-				def.pos_mode = "door";
-			else if (WsuiCategoryEq(category_id, "zone") || WsuiCategoryEq(category_id, "campfire"))
-				def.pos_mode = "zone";
-			else if (WsuiCategoryEq(category_id, "item"))
-				def.pos_mode = "bone";
-			else
-				def.pos_mode = "bone";
-		}
-
-		if (!def.prompt_mode.size())
-		{
-			if (WsuiCategoryEq(category_id, "item") || WsuiCategoryEq(category_id, "npc") || WsuiCategoryEq(category_id, "body") || WsuiCategoryEq(category_id, "stash"))
-				def.prompt_mode = "split";
-			else if (WsuiCategoryEq(category_id, "zone"))
-				def.prompt_mode = "zone_lookup";
-			else if (WsuiCategoryEq(category_id, "campfire"))
-				def.prompt_mode = "campfire";
-			else if (WsuiCategoryEq(category_id, "usable") || WsuiCategoryEq(category_id, "door"))
-				def.prompt_mode = "usable_tip";
-			else
-				def.prompt_mode = "full";
-		}
-
-		if (!def.verb_id.size())
-		{
-			if (WsuiCategoryEq(category_id, "item"))
-				def.verb_id = "ui_st_wsui_pickup";
-			else if (WsuiCategoryEq(category_id, "npc"))
-				def.verb_id = "ui_st_wsui_talk";
-			else if (WsuiCategoryEq(category_id, "body"))
-				def.verb_id = "ui_st_wsui_search";
-			else if (WsuiCategoryEq(category_id, "stash"))
-				def.verb_id = "ui_st_wsui_open";
-		}
-
-		if (!def.name_source.size())
-		{
-			if (WsuiCategoryEq(category_id, "item"))
-				def.name_source = "item_name";
-			else if (WsuiCategoryEq(category_id, "npc"))
-				def.name_source = "stalker_name";
-			else if (WsuiCategoryEq(category_id, "body"))
-				def.name_source = "body_name";
-			else
-				def.name_source = "none";
-		}
-
-		if (!def.campfire_on_tip.size())
-			def.campfire_on_tip = "st_extinguish_fire";
-		if (!def.campfire_off_tip.size())
-			def.campfire_off_tip = "st_ignite_fire";
 	}
 }

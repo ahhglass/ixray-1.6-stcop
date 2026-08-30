@@ -173,7 +173,7 @@ u32 CInteractionMarkerManager::GetItemConditionColor(float condition) const
 
 u32 CInteractionMarkerManager::CountGroupedItemMarkers(const SInteractionMarker& focus_marker) const
 {
-	if (!WSUIInternal::WsuiCategoryEq(focus_marker.category_id, "item"))
+	if (!IsPromptStackCountEnabled(focus_marker.category_id))
 		return 1;
 
 	CObject* focus_obj = Level().Objects.net_Find(focus_marker.object_id);
@@ -187,7 +187,7 @@ u32 CInteractionMarkerManager::CountGroupedItemMarkers(const SInteractionMarker&
 
 	for (const auto& [id, marker] : m_markers)
 	{
-		if (!WSUIInternal::WsuiCategoryEq(marker.category_id, "item") || !marker.visible || !marker.reachable)
+		if (!IsPromptStackCountEnabled(marker.category_id) || !marker.visible || !marker.reachable)
 			continue;
 
 		if (marker.screen_pos.x < 0.f || focus_pos.x < 0.f)
@@ -285,7 +285,7 @@ bool CInteractionMarkerManager::BuildPromptByMode(CActor* actor, CGameObject* ga
 
 		ResolvePromptName(game_object, category.name_source, out.name);
 
-		if (WSUIInternal::CategoryHasFeature(category, EWSUICategoryFeature::StackCount))
+		if (IsPromptStackCountEnabled(marker.category_id))
 		{
 			const u32 count = CountGroupedItemMarkers(marker);
 			if (count > 1 && out.name[0])
@@ -296,7 +296,7 @@ bool CInteractionMarkerManager::BuildPromptByMode(CActor* actor, CGameObject* ga
 			}
 		}
 
-		if (WSUIInternal::CategoryHasFeature(category, EWSUICategoryFeature::ItemCondition))
+		if (IsPromptConditionEnabled(category))
 		{
 			if (CInventoryItem* item = game_object->cast_inventory_item())
 			{
@@ -386,10 +386,7 @@ bool CInteractionMarkerManager::BuildPromptParts(CActor* actor, const SInteracti
 	if (!cat)
 		return false;
 
-	SWSUICategoryDef category = *cat;
-	WSUIInternal::ApplyDefaultCategoryBehavior(category, marker.category_id);
-
-	if (BuildPromptByMode(actor, game_object, category, marker, out))
+	if (BuildPromptByMode(actor, game_object, *cat, marker, out))
 		return true;
 
 	if (LPCSTR action = actor->GetDefaultActionForObject())
@@ -636,7 +633,7 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 			ColorWithAlpha(at.full_line.color, alpha), CGameFont::alLeft, at.full_line.text_shadow);
 	}
 
-	if (parts.show_condition)
+	if (parts.show_condition && m_prompt_cfg.features.item_condition)
 	{
 		CGameFont* cond_font = cond_cfg.label.font ? cond_cfg.label.font : name_font;
 		if (cond_font)
@@ -683,7 +680,7 @@ void CInteractionMarkerManager::RenderPromptBubble(float cx, float cy, const SWS
 		}
 	}
 
-	if (marker && CategoryHasFeature(marker->category_id, EWSUICategoryFeature::ItemCard))
+	if (marker && IsPromptItemCardEnabled(marker->category_id))
 	{
 		if (CObject* object = Level().Objects.net_Find(marker->object_id))
 		{
@@ -796,10 +793,10 @@ void CInteractionMarkerManager::RenderItemCard(float panel_left, float panel_bot
 
 void CInteractionMarkerManager::RenderPrompt(CActor* actor) const
 {
-	if (!actor || m_prompt_focus_id == 0xffff || m_prompt_alpha <= 0.01f)
+	if (!actor || m_focus.prompt_focus_id == 0xffff || m_prompt_fade.alpha <= 0.01f)
 		return;
 
-	auto it = m_markers.find(m_prompt_focus_id);
+	auto it = m_markers.find(m_focus.prompt_focus_id);
 	if (it == m_markers.end() || !it->second.visible || !it->second.reachable)
 		return;
 
@@ -811,7 +808,7 @@ void CInteractionMarkerManager::RenderPrompt(CActor* actor) const
 		return;
 
 	LPCSTR key_name = GetKeyName();
-	const float alpha = m_prompt_alpha;
+	const float alpha = m_prompt_fade.alpha;
 	const float scale = UiScale();
 
 	if (m_prompt_cfg.features.fixed_screen)
@@ -830,7 +827,7 @@ void CInteractionMarkerManager::RenderPrompt(CActor* actor) const
 
 void CInteractionMarkerManager::RenderTutorialPrompt() const
 {
-	if (m_tutorial_prompt_alpha <= 0.01f)
+	if (m_tutorial_fade.alpha <= 0.01f)
 		return;
 
 	LPCSTR tutorial_name = GetActiveTutorialName();
@@ -846,7 +843,7 @@ void CInteractionMarkerManager::RenderTutorialPrompt() const
 	parts.split = false;
 	xr_strcpy(parts.full, action_text);
 
-	const float alpha = m_tutorial_prompt_alpha;
+	const float alpha = m_tutorial_fade.alpha;
 	const float scale = UiScale();
 	const float cx = m_prompt_cfg.tutorial_x * scale;
 	const float cy = m_prompt_cfg.tutorial_y * scale;

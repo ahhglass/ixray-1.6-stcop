@@ -56,8 +56,6 @@ void CInteractionMarkerManager::LoadWsuiMarkers(CUIXml& xml)
 	LoadMarkersPopinAnimation(xml);
 	LoadMarkerIcons(xml);
 	LoadMarkerCategories(xml);
-	if (!m_categories_from_xml)
-		LoadMarkersClasses(xml);
 	LoadMarkersDikIcons(xml);
 }
 
@@ -65,18 +63,11 @@ void CInteractionMarkerManager::LoadMarkerIcons(CUIXml& xml)
 {
 	m_icon_registry.clear();
 	m_icon_rules.clear();
-	m_default_icon_id = "intdot";
 
 	const LPCSTR root = "wsui_markers:marker_icons";
 	XML_NODE* icons_node = xml.NavigateToNode(root, 0);
 	if (!icons_node)
 		return;
-
-	if (LPCSTR def_icon = xml.ReadAttrib(icons_node, "default", nullptr))
-	{
-		if (def_icon[0])
-			m_default_icon_id = def_icon;
-	}
 
 	const int count = xml.GetNodesNum(icons_node, "icon");
 	for (int i = 0; i < count; ++i)
@@ -228,10 +219,6 @@ void CInteractionMarkerManager::LoadMarkersPriority(CUIXml& xml)
 		const float value = xml.ReadAttribFlt(priority_node, "category", i, "value", 0.f);
 		m_category_priority[id] = value;
 	}
-
-	static const LPCSTR legacy_ids[] = { "npc", "stash", "usable", "door", "item", "body", nullptr };
-	for (int i = 0; legacy_ids[i]; ++i)
-		m_category_priority[legacy_ids[i]] = xml.ReadAttribFlt(path, 0, legacy_ids[i], 0.f);
 }
 
 void CInteractionMarkerManager::LoadMarkersPopinAnimation(CUIXml& xml)
@@ -257,7 +244,6 @@ void CInteractionMarkerManager::LoadCategoryNode(CUIXml& xml, XML_NODE* category
 
 	SWSUICategoryDef& def = m_categories[id];
 	def.enabled = xml.ReadAttribInt(cat_node, "enabled", 1) != 0;
-	def.priority = xml.ReadAttribFlt(cat_node, "priority", 0.f);
 
 	const auto load_category_icon = [&](LPCSTR attr, SWSUITextureSlot& out, LPCSTR raster_attr, LPCSTR svg_child, LPCSTR svg_attr)
 	{
@@ -320,8 +306,8 @@ void CInteractionMarkerManager::LoadCategoryNode(CUIXml& xml, XML_NODE* category
 		def.campfire_on_tip = on_tip;
 	if (LPCSTR off_tip = xml.ReadAttrib(cat_node, "campfire_off_tip", nullptr))
 		def.campfire_off_tip = off_tip;
-
-	WSUIInternal::ApplyDefaultCategoryBehavior(def, id);
+	if (LPCSTR icon_lookup = xml.ReadAttrib(cat_node, "icon_lookup", nullptr))
+		def.icon_lookup = icon_lookup;
 }
 
 void CInteractionMarkerManager::LoadMarkerCategories(CUIXml& xml)
@@ -331,56 +317,11 @@ void CInteractionMarkerManager::LoadMarkerCategories(CUIXml& xml)
 	if (!categories_node)
 		return;
 
-	m_categories_from_xml = true;
 	const float default_distance = m_markers_cfg.scan.radius > 0.f ? m_markers_cfg.scan.radius : 5.f;
 
 	const int count = xml.GetNodesNum(categories_node, "category");
 	for (int i = 0; i < count; ++i)
 		LoadCategoryNode(xml, categories_node, i, default_distance);
-}
-
-void CInteractionMarkerManager::LoadMarkersClasses(CUIXml& xml)
-{
-	const LPCSTR root = "wsui_markers:classes";
-	XML_NODE* classes_node = xml.NavigateToNode(root, 0);
-	if (!classes_node)
-		return;
-
-	m_categories_from_xml = true;
-	const float default_distance = m_markers_cfg.scan.radius > 0.f ? m_markers_cfg.scan.radius : 5.f;
-
-	const int category_count = xml.GetNodesNum(classes_node, "category");
-	if (category_count > 0)
-	{
-		for (int i = 0; i < category_count; ++i)
-			LoadCategoryNode(xml, classes_node, i, default_distance);
-		return;
-	}
-
-	static const LPCSTR legacy_ids[] = {
-		"item", "npc", "body", "stash", "usable", "door", "campfire", "zone", nullptr
-	};
-
-	for (int i = 0; legacy_ids[i]; ++i)
-	{
-		if (!xml.NavigateToNode(classes_node, legacy_ids[i], 0))
-			continue;
-
-		string256 node_path;
-		xr_sprintf(node_path, "%s:%s", root, legacy_ids[i]);
-
-		SWSUICategoryDef& def = m_categories[legacy_ids[i]];
-		def.enabled = xml.ReadAttribInt(node_path, 0, "enabled", 1) != 0;
-		LoadClassIconRef(xml, node_path, "texture", def.texture);
-		LoadClassIconRef(xml, node_path, "active_texture", def.active_texture);
-		if (!def.active_texture.HasDrawable() && def.texture.HasDrawable())
-			def.active_texture = def.texture;
-		if (LPCSTR bone = xml.ReadAttrib(node_path, 0, "bone", nullptr))
-			def.bone = bone;
-		def.show_distance = xml.ReadAttribFlt(node_path, 0, "show_distance", default_distance);
-
-		WSUIInternal::ApplyDefaultCategoryBehavior(def, legacy_ids[i]);
-	}
 }
 
 void CInteractionMarkerManager::LoadMarkersDikIcons(CUIXml& xml)
@@ -390,7 +331,6 @@ void CInteractionMarkerManager::LoadMarkersDikIcons(CUIXml& xml)
 
 	static const LPCSTR keys[] = { "mouse1", "mouse2", "mouse3", "mouse4", "mouse5" };
 	m_dik_icons.clear();
-	m_dik_icons_from_xml = true;
 
 	for (LPCSTR key : keys)
 	{
@@ -546,28 +486,6 @@ void CInteractionMarkerManager::LoadIconRefSlot(CUIXml& xml, LPCSTR path, SWSUIT
 	}
 
 	LoadTextureSlot(xml, path, out, raster_attr, svg_child);
-}
-
-void CInteractionMarkerManager::LoadClassIconRef(CUIXml& xml, LPCSTR path, LPCSTR attr, SWSUITextureSlot& out) const
-{
-	out = {};
-	if (attr && attr[0])
-	{
-		if (LPCSTR icon_id = xml.ReadAttrib(path, 0, attr, nullptr))
-		{
-			if (icon_id[0])
-			{
-				out = ResolveIcon(icon_id);
-				if (out.HasDrawable())
-					return;
-			}
-		}
-	}
-
-	if (attr && !xr_strcmp(attr, "texture"))
-		LoadTextureSlot(xml, path, out);
-	else if (attr && !xr_strcmp(attr, "active_texture"))
-		LoadActiveTextureSlot(xml, path, out);
 }
 
 void CInteractionMarkerManager::LoadActiveTextureSlot(CUIXml& xml, LPCSTR path, SWSUITextureSlot& out) const
@@ -759,92 +677,6 @@ void CInteractionMarkerManager::LoadFocusSound()
 	m_focus_sound_loaded = !m_focus_snd.sounds.empty();
 }
 
-void CInteractionMarkerManager::LoadDikIconsLtx()
-{
-	m_dik_icons.clear();
-	if (!pSettings->section_exist("wsui_dik_icons"))
-		return;
-
-	const CInifile::Sect& sect = pSettings->r_section("wsui_dik_icons");
-	for (const auto& line : sect.Data)
-	{
-		int dik = keyname_to_dik(*line.first);
-		if (!dik)
-			dik = atoi(*line.first);
-		if (dik > 0)
-		{
-			SWSUITextureSlot slot = ResolveIcon(line.second);
-			if (!slot.HasDrawable())
-				slot.raster = line.second;
-			m_dik_icons[dik] = slot;
-		}
-	}
-}
-
-void CInteractionMarkerManager::LoadClassDefs()
-{
-	if (m_categories_from_xml)
-		return;
-
-	static const struct
-	{
-		LPCSTR id;
-		LPCSTR section;
-	} kEntries[] = {
-		{ "item", "wsui_class_item" },
-		{ "npc", "wsui_class_npc" },
-		{ "body", "wsui_class_body" },
-		{ "stash", "wsui_class_stash" },
-		{ "usable", "wsui_class_usable" },
-		{ "door", "wsui_class_door" },
-		{ "campfire", "wsui_class_campfire" },
-		{ "zone", "wsui_class_zone" },
-	};
-
-	const float default_distance = m_markers_cfg.scan.radius > 0.f ? m_markers_cfg.scan.radius : 5.f;
-
-	for (const auto& entry : kEntries)
-	{
-		const shared_str category_id = entry.id;
-		SWSUICategoryDef& def = m_categories[category_id];
-
-		def.enabled = true;
-		def.texture = {};
-		def.active_texture = {};
-		def.bone = nullptr;
-		def.show_distance = default_distance;
-
-		LPCSTR section = entry.section;
-		if (!section || !pSettings->section_exist(section))
-		{
-			WSUIInternal::ApplyDefaultCategoryBehavior(def, category_id);
-			continue;
-		}
-
-		def.enabled = READ_IF_EXISTS(pSettings, r_bool, section, "enabled", true);
-		def.texture.raster = READ_IF_EXISTS(pSettings, r_string, section, "texture", nullptr);
-		def.texture.svg = WSUIInternal::NormalizeWsuiSvgSubpath(READ_IF_EXISTS(pSettings, r_string, section, "svg", nullptr));
-		{
-			SWSUITextureSlot resolved = ResolveIcon(def.texture.raster);
-			if (resolved.HasDrawable())
-				def.texture = resolved;
-		}
-		def.active_texture.raster = READ_IF_EXISTS(pSettings, r_string, section, "active_texture", def.texture.raster);
-		def.active_texture.svg = WSUIInternal::NormalizeWsuiSvgSubpath(READ_IF_EXISTS(pSettings, r_string, section, "active_svg", nullptr));
-		{
-			SWSUITextureSlot resolved = ResolveIcon(def.active_texture.raster);
-			if (resolved.HasDrawable())
-				def.active_texture = resolved;
-		}
-		if (!def.active_texture.svg.size() && def.texture.svg.size())
-			def.active_texture.svg = def.texture.svg;
-		def.bone = READ_IF_EXISTS(pSettings, r_string, section, "bone", nullptr);
-		def.show_distance = READ_IF_EXISTS(pSettings, r_float, section, "show_distance", default_distance);
-
-		WSUIInternal::ApplyDefaultCategoryBehavior(def, category_id);
-	}
-}
-
 void CInteractionMarkerManager::LoadFloatLookupSection(LPCSTR section_name, xr_map<shared_str, float>& out)
 {
 	out.clear();
@@ -886,21 +718,10 @@ void CInteractionMarkerManager::LoadBonePriority()
 {
 	m_bone_priority.clear();
 
-	static const LPCSTR default_bones[] = {
-		"wpn_body", "bip01_spine1", "spine_1", "door_right", "door_left",
-		"lock", "door", "link", "joint", "joint1", "patch", "bone01", nullptr
-	};
+	if (!pSettings->section_exist("bones"))
+		return;
 
-	if (pSettings->section_exist("bones"))
-	{
-		const CInifile::Sect& sect = pSettings->r_section("bones");
-		for (const auto& line : sect.Data)
-			m_bone_priority.push_back(line.first);
-	}
-
-	if (m_bone_priority.empty())
-	{
-		for (u32 i = 0; default_bones[i]; ++i)
-			m_bone_priority.emplace_back(default_bones[i]);
-	}
+	const CInifile::Sect& sect = pSettings->r_section("bones");
+	for (const auto& line : sect.Data)
+		m_bone_priority.push_back(line.first);
 }

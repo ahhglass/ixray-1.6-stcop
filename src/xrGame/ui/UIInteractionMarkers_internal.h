@@ -14,5 +14,4 @@ namespace WSUIInternal
 	u32 ParseRuleFlags(LPCSTR token);
 	void ParseClassRuleValue(LPCSTR value, SWSUIClassRule& out);
 	void TrimInPlace(char* text);
-	void ApplyDefaultCategoryBehavior(SWSUICategoryDef& def, shared_str category_id);
 }
