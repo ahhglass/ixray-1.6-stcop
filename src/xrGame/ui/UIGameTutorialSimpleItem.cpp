@@ -16,6 +16,7 @@
 #include "../ai_space.h"
 #include "UIInventoryWnd.h"
 #include "../../xrEngine/string_table.h"
+#include "UIInteractionMarkers.h"
 
 extern ENGINE_API bool bShowPauseString;
 
@@ -196,6 +197,18 @@ float CUISequenceSimpleItem::current_factor()
 void CUISequenceSimpleItem::Update()
 {
 	inherited::Update();
+
+	if (WSUI_ShouldHideTutorialUI())
+	{
+		m_UIWindow->Show(false);
+		for (SSubItem& s : m_subitems)
+			s.Stop();
+
+		if (m_desired_cursor_pos.x && m_desired_cursor_pos.y)
+			GetUICursor().SetUICursorPosition(m_desired_cursor_pos);
+		return;
+	}
+
 	float _start					= (m_time_start<0.0f)? (float(Device.dwTimeContinual)/1000.0f) : m_time_start;
 
 	float gt						= float(Device.dwTimeContinual)/1000.0f;
@@ -255,6 +268,13 @@ void CUISequenceSimpleItem::Start()
 		GetUICursor().SetUICursorPosition(m_desired_cursor_pos);
 
 	m_owner->MainWnd()->AttachChild	(m_UIWindow);
+
+	if (WSUI_ShouldHideTutorialUI())
+	{
+		m_UIWindow->Show(false);
+		for (SSubItem& s : m_subitems)
+			s.Stop();
+	}
 
 	if (m_sound.handle()) {
 		m_sound.play(nullptr, sm_2D);

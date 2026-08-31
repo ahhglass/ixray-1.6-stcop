@@ -237,6 +237,16 @@ bool CInteractionMarkerManager::ResolvePromptName(CGameObject* game_object, shar
 	if (WSUIInternal::WsuiCategoryEq(name_source, "none"))
 		return true;
 
+	if (WSUIInternal::WsuiCategoryEq(name_source, "box_name"))
+	{
+		if (LPCSTR name = WSUIInternal::WsuiString("ui_st_wsui_box"))
+		{
+			xr_strcpy(out, name);
+			return true;
+		}
+		return false;
+	}
+
 	if (WSUIInternal::WsuiCategoryEq(name_source, "item_name"))
 	{
 		if (CInventoryItem* item = game_object->cast_inventory_item())
@@ -276,14 +286,81 @@ bool CInteractionMarkerManager::ResolvePromptName(CGameObject* game_object, shar
 	return false;
 }
 
+bool CInteractionMarkerManager::BuildPromptFromStringId(LPCSTR string_id, SWSUIPromptParts& out) const
+{
+	out.split = false;
+	out.verb[0] = 0;
+	out.name[0] = 0;
+	out.full[0] = 0;
+
+	if (!string_id || !string_id[0])
+		return false;
+
+	auto it = m_prompt_split_by_string_id.find(string_id);
+	if (it != m_prompt_split_by_string_id.end())
+	{
+		LPCSTR verb = WSUIInternal::WsuiString(it->second.verb_id.c_str());
+		if (!verb || !verb[0])
+			return false;
+
+		out.split = true;
+		xr_strcpy(out.verb, verb);
+
+		if (it->second.name_id.size())
+		{
+			LPCSTR name = WSUIInternal::WsuiString(it->second.name_id.c_str());
+			if (name && name[0])
+				xr_strcpy(out.name, name);
+		}
+
+		return out.verb[0] != 0 || out.name[0] != 0;
+	}
+
+	LPCSTR translated = g_pStringTable->translate(string_id).c_str();
+	if (!translated || !translated[0])
+		return false;
+
+	xr_strcpy(out.full, translated);
+	return true;
+}
+
 bool CInteractionMarkerManager::BuildPromptByMode(CActor* actor, CGameObject* game_object, const SWSUICategoryDef& category, const SInteractionMarker& marker, SWSUIPromptParts& out) const
 {
 	if (WSUIInternal::WsuiCategoryEq(category.prompt_mode, "split"))
 	{
-		if (category.verb_id.size())
+		bool tip_split_used = false;
+		if (CUsableScriptObject* usable = game_object->cast_usable_script_object())
+		{
+			if (usable->tip_text() && usable->tip_text()[0])
+			{
+				auto it = m_prompt_split_by_string_id.find(usable->tip_text());
+				if (it != m_prompt_split_by_string_id.end())
+				{
+					if (it->second.verb_id.size())
+					{
+						LPCSTR verb = WSUIInternal::WsuiString(it->second.verb_id.c_str());
+						if (verb && verb[0])
+						{
+							xr_strcpy(out.verb, verb);
+							tip_split_used = true;
+						}
+					}
+
+					if (it->second.name_id.size())
+					{
+						LPCSTR name = WSUIInternal::WsuiString(it->second.name_id.c_str());
+						if (name && name[0])
+							xr_strcpy(out.name, name);
+					}
+				}
+			}
+		}
+
+		if (!tip_split_used && category.verb_id.size())
 			xr_strcpy(out.verb, WSUIInternal::WsuiString(category.verb_id.c_str()));
 
-		ResolvePromptName(game_object, category.name_source, out.name);
+		if (!out.name[0])
+			ResolvePromptName(game_object, category.name_source, out.name);
 
 		if (IsPromptStackCountEnabled(marker.category_id))
 		{
@@ -317,10 +394,7 @@ bool CInteractionMarkerManager::BuildPromptByMode(CActor* actor, CGameObject* ga
 		if (CUsableScriptObject* usable = game_object->cast_usable_script_object())
 		{
 			if (usable->tip_text() && usable->tip_text()[0])
-			{
-				xr_strcpy(out.full, g_pStringTable->translate(usable->tip_text()).c_str());
-				return out.full[0] != 0;
-			}
+				return BuildPromptFromStringId(usable->tip_text(), out);
 		}
 		return false;
 	}
@@ -328,10 +402,7 @@ bool CInteractionMarkerManager::BuildPromptByMode(CActor* actor, CGameObject* ga
 	if (WSUIInternal::WsuiCategoryEq(category.prompt_mode, "zone_lookup"))
 	{
 		if (LPCSTR prompt = ResolveZonePrompt(game_object))
-		{
-			xr_strcpy(out.full, g_pStringTable->translate(prompt).c_str());
-			return out.full[0] != 0;
-		}
+			return BuildPromptFromStringId(prompt, out);
 		return false;
 	}
 
@@ -835,13 +906,9 @@ void CInteractionMarkerManager::RenderTutorialPrompt() const
 	if (!prompt_key)
 		return;
 
-	LPCSTR action_text = g_pStringTable->translate(prompt_key).c_str();
-	if (!action_text || !action_text[0])
-		return;
-
 	SWSUIPromptParts parts;
-	parts.split = false;
-	xr_strcpy(parts.full, action_text);
+	if (!BuildPromptFromStringId(prompt_key, parts))
+		return;
 
 	const float alpha = m_tutorial_fade.alpha;
 	const float scale = UiScale();

@@ -18,6 +18,7 @@
 #include "../../xrEngine/string_table.h"
 #include "../ai/monsters/basemonster/base_monster.h"
 #include "../Car.h"
+#include "UIInteractionMarkers.h"
 
 // -------------------------------------------------------------------------------------------------
 
@@ -92,6 +93,9 @@ void CUIActorMenu::DeInitDeadBodySearchMode()
 	{
 		m_pInvBox->set_in_use( false );
 	}
+
+	if (m_pPartnerInvOwner && !m_pPartnerInvOwner->is_alive() && g_pInteractionMarkerManager)
+		g_pInteractionMarkerManager->SuppressCorpseMarker(m_pPartnerInvOwner->object_id());
 }
 
 void CUIActorMenu::UpdateDeadBodyBag()

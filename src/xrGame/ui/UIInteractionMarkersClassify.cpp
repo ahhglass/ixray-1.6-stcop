@@ -32,6 +32,21 @@ namespace
 	{
 		return EngineExternal()[EEngineExternalGame::EnableMonstersInventory];
 	}
+
+	CInventoryBox* MatchLootInventoryBox(CGameObject* obj)
+	{
+		CInventoryBox* box = obj->cast_inventory_box();
+		if (!box || box->closed())
+			return nullptr;
+
+		if (CUsableScriptObject* usable = obj->cast_usable_script_object())
+		{
+			if (usable->tip_text() && !xr_stricmp(usable->tip_text(), "actor_inventory_box_use"))
+				return nullptr;
+		}
+
+		return box;
+	}
 }
 
 const SWSUICategoryDef* CInteractionMarkerManager::GetCategory(shared_str category_id) const
@@ -104,8 +119,34 @@ bool CInteractionMarkerManager::MatchDetector(CGameObject* obj, const SWSUIClass
 	const LPCSTR detector = rule.detector.c_str();
 	const u32 flags = rule.flags;
 
+	if (!xr_stricmp(detector, "inventory_box_personal"))
+	{
+		CInventoryBox* box = obj->cast_inventory_box();
+		if (!box || box->closed())
+			return false;
+
+		if (CUsableScriptObject* usable = obj->cast_usable_script_object())
+			return usable->tip_text() && !xr_stricmp(usable->tip_text(), "actor_inventory_box_use");
+
+		return false;
+	}
+
+	if (!xr_stricmp(detector, "inventory_box_full"))
+	{
+		CInventoryBox* box = MatchLootInventoryBox(obj);
+		return box && !box->IsEmpty();
+	}
+
+	if (!xr_stricmp(detector, "inventory_box_empty"))
+	{
+		CInventoryBox* box = MatchLootInventoryBox(obj);
+		return box && box->IsEmpty();
+	}
+
 	if (!xr_stricmp(detector, "inventory_box"))
-		return obj->cast_inventory_box() != nullptr;
+	{
+		return MatchLootInventoryBox(obj) != nullptr;
+	}
 
 	if (!xr_stricmp(detector, "stalker_alive"))
 	{
@@ -122,7 +163,25 @@ bool CInteractionMarkerManager::MatchDetector(CGameObject* obj, const SWSUIClass
 		if (CAI_Stalker* stalker = obj->cast_stalker())
 		{
 			if (CEntityAlive* alive = stalker->cast_entity_alive())
-				return !alive->g_Alive();
+			{
+				if (alive->g_Alive())
+					return false;
+
+				CInventoryOwner* owner = obj->cast_inventory_owner();
+				if (owner && owner->deadbody_closed_status())
+					return false;
+
+				if (IsCorpseMarkerSuppressed(obj->ID()))
+					return false;
+
+				if (flags & static_cast<u32>(EWSUIRuleFlag::RequireCorpse))
+				{
+					if (!owner || !CorpseHasInventoryItems(owner))
+						return false;
+				}
+
+				return true;
+			}
 		}
 		return false;
 	}
@@ -137,9 +196,6 @@ bool CInteractionMarkerManager::MatchDetector(CGameObject* obj, const SWSUIClass
 			if (CEntityAlive* alive = monster->cast_entity_alive())
 			{
 				if (alive->g_Alive())
-					return false;
-
-				if (HasUsableTip(obj))
 					return false;
 
 				if (flags & static_cast<u32>(EWSUIRuleFlag::RequireCorpse) && !ShouldShowMonsterCorpse(obj))
@@ -181,6 +237,9 @@ bool CInteractionMarkerManager::MatchDetector(CGameObject* obj, const SWSUIClass
 
 	if (!xr_stricmp(detector, "usable_tip"))
 	{
+		if (obj->cast_inventory_box())
+			return false;
+
 		if (!HasUsableTip(obj))
 			return false;
 		if (flags & static_cast<u32>(EWSUIRuleFlag::RequireUsableTip))
@@ -310,6 +369,9 @@ bool CInteractionMarkerManager::ShouldShowMonsterCorpse(CGameObject* obj) const
 
 	CInventoryOwner* owner = obj->cast_inventory_owner();
 	if (!owner || owner->deadbody_closed_status())
+		return false;
+
+	if (IsCorpseMarkerSuppressed(obj->ID()))
 		return false;
 
 	return CorpseHasInventoryItems(owner);
@@ -496,7 +558,6 @@ void CInteractionMarkerManager::RefreshMarkerClassifyCache(SInteractionMarker& m
 		marker.cached_bone = nullptr;
 
 	marker.classify_valid = true;
-	marker.los_stale = true;
 }
 
 SWSUITextureSlot CInteractionMarkerManager::ResolveSpecialIcons(CGameObject* obj, shared_str icon_lookup) const

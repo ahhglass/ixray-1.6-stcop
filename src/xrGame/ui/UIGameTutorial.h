@@ -38,6 +38,7 @@ public:
 
 
 	const char*					m_name;
+	shared_str					m_tutorial_name;
 	//IInputReceiver
 	virtual void			IR_OnMousePress		(int btn);
 	virtual void			IR_OnMouseRelease	(int btn);

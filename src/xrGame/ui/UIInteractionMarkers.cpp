@@ -116,6 +116,18 @@ void CInteractionMarkerManager::ClearMarkerState()
 	m_focus.prompt_focus_id = 0xffff;
 	m_prompt_fade.alpha = 0.f;
 	m_tutorial_fade.alpha = 0.f;
+	m_suppressed_corpse_ids.clear();
+}
+
+void CInteractionMarkerManager::SuppressCorpseMarker(u16 object_id)
+{
+	if (object_id != 0xffff)
+		m_suppressed_corpse_ids.insert(object_id);
+}
+
+bool CInteractionMarkerManager::IsCorpseMarkerSuppressed(u16 object_id) const
+{
+	return object_id != 0xffff && m_suppressed_corpse_ids.find(object_id) != m_suppressed_corpse_ids.end();
 }
 
 void CInteractionMarkerManager::SetScriptEnabled(bool enabled)
@@ -218,6 +230,7 @@ void CInteractionMarkerManager::Load()
 	m_zone_textures_by_name.clear();
 	m_zone_prompts_by_name.clear();
 	m_tutorial_prompts_by_name.clear();
+	m_prompt_split_by_string_id.clear();
 	m_icon_registry.clear();
 	m_icon_rules.clear();
 	m_npc_section_patterns.clear();
@@ -248,6 +261,7 @@ void CInteractionMarkerManager::Load()
 	m_ui_xml = READ_IF_EXISTS(pSettings, r_string, "wsui", "ui_xml", nullptr);
 	m_hide_mute_stalkers = READ_IF_EXISTS(pSettings, r_bool, "wsui", "hide_mute_stalkers", true);
 	m_suppress_tutorial_ui = READ_IF_EXISTS(pSettings, r_bool, "wsui", "suppress_tutorial_ui", true);
+	m_suppress_marker_on_tutorial_object = READ_IF_EXISTS(pSettings, r_bool, "wsui", "suppress_marker_on_tutorial_object", true);
 	m_enable_quest_scheme_scan = READ_IF_EXISTS(pSettings, r_bool, "wsui", "enable_quest_scheme_scan", true);
 	LoadWsuiXml();
 	LoadFocusSound();
@@ -259,6 +273,7 @@ void CInteractionMarkerManager::Load()
 	LoadTextureLookupSection("zone_textures_by_name", m_zone_textures_by_name);
 	LoadTextureLookupSection("zone_prompts_by_name", m_zone_prompts_by_name);
 	LoadTextureLookupSection("tutorial_prompts_by_name", m_tutorial_prompts_by_name);
+	LoadPromptSplitSection("prompt_split_by_string_id");
 	LoadTextureLookupSection("npc_section_contains", m_npc_section_patterns);
 	LoadTextureLookupSection("usable_section_contains", m_usable_section_patterns);
 	LoadTextureLookupSection("zone_name_contains", m_zone_name_patterns);
@@ -362,10 +377,10 @@ LPCSTR CInteractionMarkerManager::GetActiveTutorialName() const
 	if (!g_tutorial || !g_tutorial->IsActive())
 		return nullptr;
 
-	if (!g_tutorial->m_name || !g_tutorial->m_name[0])
+	if (!g_tutorial->m_tutorial_name.size())
 		return nullptr;
 
-	return g_tutorial->m_name;
+	return g_tutorial->m_tutorial_name.c_str();
 }
 
 bool CInteractionMarkerManager::HasTutorialPromptMapping(LPCSTR tutorial_name) const
@@ -778,16 +793,27 @@ void CInteractionMarkerManager::UpdateMarkerPositions(CActor* actor)
 		else
 		{
 			const u32 los_ttl = los.cache_ttl_ms > 0 ? los.cache_ttl_ms : 150u;
-			const bool stale = !marker.los_has_result || marker.los_stale || (now - marker.los_check_time >= los_ttl);
-			if (stale && los_check_ids.find(id) != los_check_ids.end())
+			const bool needs_recheck = !marker.los_has_result
+				|| marker.los_stale
+				|| (now - marker.los_check_time >= los_ttl);
+
+			bool rechecked = false;
+			if (needs_recheck && los_check_ids.find(id) != los_check_ids.end())
 			{
 				marker.los_reachable = HasLineOfSight(actor, game_object, world_pos);
 				marker.los_has_result = true;
 				marker.los_stale = false;
 				marker.los_check_time = now;
+				rechecked = true;
 			}
 
-			marker.reachable = marker.los_has_result ? marker.los_reachable : false;
+			if (!marker.los_has_result)
+				marker.reachable = false;
+			else if (marker.los_stale && !rechecked)
+				marker.reachable = false;
+			else
+				marker.reachable = marker.los_reachable;
+
 			if (!marker.reachable)
 				continue;
 		}
@@ -1199,13 +1225,26 @@ bool CInteractionMarkerManager::WantsPromptVisible(CActor* actor) const
 	if (!marker.visible || !marker.reachable || marker.distance > m_markers_cfg.scan.prompt_distance)
 		return false;
 
-	if (m_suppress_tutorial_ui &&
-		CategoryHasFeature(marker.category_id, EWSUICategoryFeature::SuppressTutorial))
+	if (m_suppress_tutorial_ui)
 	{
 		if (LPCSTR tutorial_name = GetActiveTutorialName())
 		{
 			if (HasTutorialPromptMapping(tutorial_name))
-				return false;
+			{
+				if (CategoryHasFeature(marker.category_id, EWSUICategoryFeature::SuppressTutorial))
+					return false;
+
+				if (m_suppress_marker_on_tutorial_object)
+				{
+					CObject* object = Level().Objects.net_Find(m_focus.focus_id);
+					if (CGameObject* game_object = object ? object->cast_game_object() : nullptr)
+					{
+						if (game_object->cName().size() &&
+							!xr_stricmp(game_object->cName().c_str(), tutorial_name))
+							return false;
+					}
+				}
+			}
 		}
 	}
 

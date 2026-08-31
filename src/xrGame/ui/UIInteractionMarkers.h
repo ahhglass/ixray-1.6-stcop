@@ -316,6 +316,12 @@ struct SWSUITutorialFadeState
 	u32 fade_start_time = 0;
 };
 
+struct SWSUIPromptSplitDef
+{
+	shared_str verb_id;
+	shared_str name_id;
+};
+
 struct SWSUIScanState
 {
 	u32 last_scan_time = 0;
@@ -353,6 +359,7 @@ public:
 
 	bool ShouldSuppressNpcNameAtDistance(float distance) const;
 	bool ShouldSuppressTutorialUiWhenActive() const;
+	void SuppressCorpseMarker(u16 object_id);
 
 private:
 	void ClearMarkerState();
@@ -362,6 +369,7 @@ private:
 	void LoadLookupSection(LPCSTR section_name, bool is_pos_adj);
 	void LoadFloatLookupSection(LPCSTR section_name, xr_map<shared_str, float>& out);
 	void LoadTextureLookupSection(LPCSTR section_name, xr_map<shared_str, shared_str>& out);
+	void LoadPromptSplitSection(LPCSTR section_name);
 	void LoadBonePriority();
 	void BuildQuestSchemeIndex();
 	void CollectQuestSchemesInDir(LPCSTR dir_path);
@@ -448,6 +456,7 @@ private:
 	bool HasUsableTip(CGameObject* obj) const;
 	bool IsKnownZone(CGameObject* obj) const;
 	bool ShouldShowMonsterCorpse(CGameObject* obj) const;
+	bool IsCorpseMarkerSuppressed(u16 object_id) const;
 	LPCSTR ResolveZonePrompt(CGameObject* obj) const;
 	LPCSTR ResolveDoorBone(CGameObject* obj) const;
 	float GetDoorVisualYOffset(CGameObject* obj) const;
@@ -466,6 +475,7 @@ private:
 	bool DrawTextureSlot(const SWSUITextureSlot& slot, float cx, float cy, float w, float h, u32 color, bool keep_square = false, float angle = 0.f) const;
 	bool BuildPromptParts(CActor* actor, const SInteractionMarker& marker, SWSUIPromptParts& out) const;
 	bool BuildPromptByMode(CActor* actor, CGameObject* game_object, const SWSUICategoryDef& category, const SInteractionMarker& marker, SWSUIPromptParts& out) const;
+	bool BuildPromptFromStringId(LPCSTR string_id, SWSUIPromptParts& out) const;
 	bool ResolvePromptName(CGameObject* game_object, shared_str name_source, string256& out) const;
 	bool BuildPromptText(CActor* actor, const SInteractionMarker& marker, string512& out) const;
 	void RenderPrompt(CActor* actor) const;
@@ -490,6 +500,7 @@ private:
 	s8 m_script_enabled_override = -1;
 	bool m_enabled = false;
 	bool m_suppress_tutorial_ui = true;
+	bool m_suppress_marker_on_tutorial_object = true;
 	bool m_quest_scheme_index_built = false;
 	bool m_hide_mute_stalkers = true;
 	bool m_enable_quest_scheme_scan = true;
@@ -518,6 +529,7 @@ private:
 	xr_map<shared_str, shared_str> m_zone_textures_by_name;
 	xr_map<shared_str, shared_str> m_zone_prompts_by_name;
 	xr_map<shared_str, shared_str> m_tutorial_prompts_by_name;
+	xr_map<shared_str, SWSUIPromptSplitDef> m_prompt_split_by_string_id;
 	xr_set<shared_str> m_quest_scheme_stories;
 	xr_set<shared_str> m_breakable_box_visuals;
 	xr_vector<shared_str> m_bone_priority;
@@ -527,6 +539,7 @@ private:
 	float m_svg_cache_ui_scale = -1.f;
 
 	xr_map<u16, SInteractionMarker> m_markers;
+	xr_set<u16> m_suppressed_corpse_ids;
 	SWSUIFocusState m_focus;
 	SWSUIPromptFadeState m_prompt_fade;
 	SWSUITutorialFadeState m_tutorial_fade;

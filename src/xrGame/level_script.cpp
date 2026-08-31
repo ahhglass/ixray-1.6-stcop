@@ -1037,7 +1037,7 @@ void stop_tutorial()
 const char* tutorial_name()
 {
 	if (g_tutorial)
-		return g_tutorial->m_name;
+		return g_tutorial->m_tutorial_name.c_str();
 	return "invalid";
 }
 

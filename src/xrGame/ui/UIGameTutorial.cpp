@@ -111,6 +111,7 @@ CUISequencer::CUISequencer()
 {
 	m_flags.zero();
 	m_name = "invalid";
+	m_tutorial_name = "invalid";
 }
 
 void CUISequencer::Start(const char* tutor_name)
@@ -119,7 +120,8 @@ void CUISequencer::Start(const char* tutor_name)
 	Device.seqFrame.Add			(this, REG_PRIORITY_LOW-10000);
 	
 	
-	m_name						= tutor_name;
+	m_tutorial_name				= tutor_name;
+	m_name						= m_tutorial_name.c_str();
 	m_UIWindow					= new CUIWindow();
 
 	CUIXml uiXml;

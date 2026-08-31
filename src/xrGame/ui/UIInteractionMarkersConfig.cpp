@@ -2,6 +2,8 @@
 #include "UIInteractionMarkers.h"
 #include "UIInteractionMarkers_internal.h"
 
+#include <algorithm>
+
 #include "../../xrUI/UIXmlInit.h"
 #include "../../xrUI/UITextureMaster.h"
 #include "../../xrUI/UIVectorBinding.h"
@@ -697,6 +699,74 @@ void CInteractionMarkerManager::LoadTextureLookupSection(LPCSTR section_name, xr
 	const CInifile::Sect& sect = pSettings->r_section(section_name);
 	for (const auto& line : sect.Data)
 		out[line.first] = line.second;
+}
+
+namespace
+{
+	void CopyTrimmedToken(LPSTR dst, size_t dst_size, LPCSTR src, size_t len)
+	{
+		if (!dst || dst_size == 0)
+			return;
+
+		dst[0] = 0;
+		if (!src || len == 0)
+			return;
+
+		while (len > 0 && (src[0] == ' ' || src[0] == '\t'))
+		{
+			++src;
+			--len;
+		}
+
+		while (len > 0 && (src[len - 1] == ' ' || src[len - 1] == '\t'))
+			--len;
+
+		const size_t copy_len = std::min(len, dst_size - 1);
+		strncpy_s(dst, dst_size, src, copy_len);
+		dst[copy_len] = 0;
+	}
+}
+
+void CInteractionMarkerManager::LoadPromptSplitSection(LPCSTR section_name)
+{
+	m_prompt_split_by_string_id.clear();
+	if (!section_name || !pSettings->section_exist(section_name))
+		return;
+
+	const CInifile::Sect& sect = pSettings->r_section(section_name);
+	for (const auto& line : sect.Data)
+	{
+		LPCSTR value = *line.second;
+		if (!value || !value[0])
+			continue;
+
+		SWSUIPromptSplitDef def;
+		LPCSTR pipe = strchr(value, '|');
+		if (pipe)
+		{
+			string256 verb_buf = {};
+			string256 name_buf = {};
+			CopyTrimmedToken(verb_buf, sizeof(verb_buf), value, pipe - value);
+			CopyTrimmedToken(name_buf, sizeof(name_buf), pipe + 1, strlen(pipe + 1));
+			if (!verb_buf[0])
+				continue;
+
+			def.verb_id = verb_buf;
+			if (name_buf[0])
+				def.name_id = name_buf;
+		}
+		else
+		{
+			string256 verb_buf = {};
+			CopyTrimmedToken(verb_buf, sizeof(verb_buf), value, strlen(value));
+			if (!verb_buf[0])
+				continue;
+
+			def.verb_id = verb_buf;
+		}
+
+		m_prompt_split_by_string_id[line.first] = def;
+	}
 }
 
 void CInteractionMarkerManager::LoadLookupSection(LPCSTR section_name, bool is_pos_adj)
