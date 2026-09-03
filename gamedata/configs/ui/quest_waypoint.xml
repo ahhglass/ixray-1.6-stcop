@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<w>
+	<quest_waypoint
+		enabled="1"
+		y_offset="34"
+		edge_margin="12"
+		on_screen_margin="32"
+		edge_icon_inset="0"
+		edge_rotate="1"
+		edge_heading_angle="0"
+		distance_epsilon="1.0"
+		show_border="0"
+		show_distance="0">
+
+		<icons
+			storyline="ui_inGame2_PDA_icon_Primary_mission"
+			additional="ui_inGame2_PDA_icon_Secondary_mission"
+			arrow="ui_hud_map_arrow"
+			border="ui_pda2_stask_last_02"/>
+
+		<marker x="0" y="0" width="32" height="32" stretch="1" alignment="c">
+			<texture>ui_inGame2_PDA_icon_Primary_mission</texture>
+		</marker>
+
+		<arrow x="0" y="0" width="24" height="32" stretch="1" alignment="c" heading="1" rotate="1" heading_angle="0">
+			<texture>ui_hud_map_arrow</texture>
+		</arrow>
+
+		<distance_text x="0" y="0" width="80" height="16" show="0" format="%.0f m" align="c">
+			<text align="c" font="font_oswald_18" r="221" g="221" b="221" a="255"/>
+		</distance_text>
+	</quest_waypoint>
+</w>

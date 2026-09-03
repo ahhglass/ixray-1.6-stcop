@@ -5,6 +5,7 @@
 #include "UIMessagesWindow.h"
 #include "UIZoneMap.h"
 #include "UICompassBar.h"
+#include "UIQuestWaypoint.h"
 #include "UINavigationOwnership.h"
 #include "../../xrCore/EngineExternal.h"
 
@@ -118,6 +119,7 @@ CUIMainIngameWnd::CUIMainIngameWnd()
 	UIStaticDiskIO				= nullptr;
 	UIZoneMap = new CUIZoneMap();
 	UICompassBar = nullptr;
+	UIQuestWaypoint = nullptr;
 	UIWeaponJammedIcon			= nullptr;
 	UIInvincibleIcon			= nullptr;
 	UIArtefactIcon				= nullptr;
@@ -155,6 +157,10 @@ ENavigationHudMode CUIMainIngameWnd::s_persistedNavigationMode = ENavigationHudM
 
 CUIMainIngameWnd::~CUIMainIngameWnd()
 {
+	if (UIQuestWaypoint)
+	{
+		UIQuestWaypoint->Reset();
+	}
 	DestroyFlashingIcons		();
 	if (UIMotionIcon)
 	{
@@ -162,12 +168,13 @@ CUIMainIngameWnd::~CUIMainIngameWnd()
 		xr_delete(UIMotionIcon);
 	}
 	xr_delete(UIZoneMap);
-	if (UICompassBar && IsChild(UICompassBar))
+	if (UICompassBar)
 	{
 		UICompassBar->SetAutoDelete(false);
 		DetachChild(UICompassBar);
+		xr_delete(UICompassBar);
+		UICompassBar = nullptr;
 	}
-	xr_delete(UICompassBar);
 	HUD_SOUND_ITEM::DestroySound(m_contactSnd);
 	xr_delete					(g_MissileForceShape);
 	xr_delete					(UIWeaponJammedIcon);
@@ -622,6 +629,11 @@ void CUIMainIngameWnd::Init()
 		SyncNavigationVisibility();
 		RebindNavigationChildren();
 	}
+
+	if (IsGameTypeSingleCompatible())
+	{
+		EnsureQuestWaypoint();
+	}
 }
 
 float UIStaticDiskIO_start_time = 0.0f;
@@ -650,6 +662,29 @@ bool CUIMainIngameWnd::EnsureCompassBar()
 
 	UICompassBar->Init();
 	return UICompassBar->IsInitialized();
+}
+
+bool CUIMainIngameWnd::EnsureQuestWaypoint()
+{
+	if (UIQuestWaypoint && UIQuestWaypoint->IsInitialized())
+	{
+		return true;
+	}
+
+	if (!UIQuestWaypoint)
+	{
+		UIQuestWaypoint = new CUIQuestWaypoint();
+	}
+
+	UIQuestWaypoint->Init();
+	if (UIQuestWaypoint->IsInitialized())
+	{
+		UIQuestWaypoint->SetAutoDelete(true);
+		AttachChild(UIQuestWaypoint);
+		return true;
+	}
+
+	return false;
 }
 
 bool CUIMainIngameWnd::IsCompassBarInitialized() const
@@ -1113,6 +1148,10 @@ void CUIMainIngameWnd::Update()
 	if (pActor)
 	{
 		UpdateNavigationHud();
+		if (UIQuestWaypoint && UIQuestWaypoint->IsInitialized())
+		{
+			UIQuestWaypoint->Update();
+		}
 	}
 
 	CUIWindow::Update();

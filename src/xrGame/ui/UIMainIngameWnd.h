@@ -11,6 +11,7 @@ class	CUIPdaMsgListItem;
 class	CLAItem;
 class CUIZoneMap;
 class CUICompassBar;
+class CUIQuestWaypoint;
 class	CUIScrollView;
 struct	GAME_NEWS_DATA;
 class	CMissile;
@@ -82,6 +83,7 @@ public:
 	CUIMotionIcon* UIMotionIcon;
 	CUIZoneMap* UIZoneMap;
 	CUICompassBar* UICompassBar;
+	CUIQuestWaypoint* UIQuestWaypoint;
 
 	CUIStackPanel* UIStackPanelBoosters;
 	CUIStackPanel* UIStackPanelIndicators;
@@ -172,6 +174,7 @@ protected:
 	ENavigationHudMode	NavigationModeFromState() const;
 
 	bool				EnsureCompassBar();
+	bool				EnsureQuestWaypoint();
 	bool				IsCompassBarInitialized() const;
 	bool				IsCompassBarActive() const;
 	void				SyncNavigationVisibility();
