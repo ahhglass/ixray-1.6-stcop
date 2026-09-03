@@ -58,8 +58,23 @@ void CRocketLauncher::AttachRocket(u16 rocket_id, CGameObject* parent_rocket_lau
 	pRocket->m_pOwner = parent_rocket_launcher->H_Root() != nullptr ? parent_rocket_launcher->H_Root()->cast_game_object() : nullptr;
 	VERIFY(pRocket->m_pOwner);
 
+	CObject* current_parent = pRocket->H_Parent();
+	if (current_parent && current_parent->ID() == parent_rocket_launcher->ID())
+	{
+		if (std::find(m_rockets.begin(), m_rockets.end(), pRocket) == m_rockets.end())
+		{
+			m_rockets.push_back(pRocket);
+		}
+		return;
+	}
+
+	VERIFY2(!current_parent, "AttachRocket: rocket already has unexpected parent");
+
 	pRocket->H_SetParent(parent_rocket_launcher);
-	m_rockets.push_back(pRocket);
+	if (std::find(m_rockets.begin(), m_rockets.end(), pRocket) == m_rockets.end())
+	{
+		m_rockets.push_back(pRocket);
+	}
 }
 
 void CRocketLauncher::DetachRocket(u16 rocket_id, bool bLaunch)
@@ -81,18 +96,29 @@ void CRocketLauncher::DetachRocket(u16 rocket_id, bool bLaunch)
 		VERIFY((It != m_rockets.end()) || (It_l != m_launched_rockets.end()));
 	};
 
+	bool detached = false;
+
 	if (It != m_rockets.end())
 	{
 		(*It)->m_bLaunched = bLaunch;
-		(*It)->H_SetParent(nullptr);
+		(*It)->H_SetParent(nullptr, !bLaunch);
 		m_rockets.erase(It);
+		detached = true;
 	};
 
 	if (It_l != m_launched_rockets.end())
 	{
 		(*It_l)->m_bLaunched = bLaunch;
-		(*It_l)->H_SetParent(nullptr);
+		if (!detached)
+		{
+			(*It_l)->H_SetParent(nullptr, !bLaunch);
+		}
 		m_launched_rockets.erase(It_l);
+	};
+
+	if (!bLaunch && OnServer())
+	{
+		pRocket->DestroyObject();
 	}
 }
 
@@ -119,7 +145,10 @@ CCustomRocket* CRocketLauncher::getCurrentRocket()
 
 void CRocketLauncher::dropCurrentRocket()
 {
-	m_rockets.pop_back();
+	if (CCustomRocket* pRocket = getCurrentRocket())
+	{
+		DetachRocket(pRocket->ID(), false);
+	}
 }
 
 u32 CRocketLauncher::getRocketCount()

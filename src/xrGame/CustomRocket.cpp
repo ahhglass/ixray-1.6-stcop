@@ -350,7 +350,9 @@ void CCustomRocket::PlayContact()
 void CCustomRocket::OnH_B_Chield()
 {
 	VERIFY(m_eState == eInactive);
-	inherited::OnH_B_Chield();
+	CObject::OnH_B_Chield();
+	setVisible(false);
+	setEnabled(false);
 }
 
 void CCustomRocket::OnH_A_Chield()
