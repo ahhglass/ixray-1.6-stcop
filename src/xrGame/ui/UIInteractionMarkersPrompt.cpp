@@ -15,6 +15,7 @@
 #include "../ai/stalker/ai_stalker.h"
 #include "../ZoneCampfire.h"
 #include "../xrEngine/xr_level_controller.h"
+#include "../xrEngine/xr_input.h"
 #include "../xrEngine/string_table.h"
 #include "../xrCore/_color.h"
 #include "../../xrUI/UITextureMaster.h"

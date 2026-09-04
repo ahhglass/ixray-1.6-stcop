@@ -4,6 +4,7 @@
 #include "../xrCore/_vector2.h"
 #include "../xrCore/FormatParsers/XML/xrXMLParser.h"
 #include "../HudSound.h"
+#include "../../xrSound/ai_sounds.h"
 #include "../../xrUI/ui_defs.h"
 
 class CGameObject;

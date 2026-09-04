@@ -6,6 +6,7 @@
 #include "../Level.h"
 #include "../GameObject.h"
 #include "../inventory_item.h"
+#include "../Inventory.h"
 #include "../InventoryBox.h"
 #include "../InventoryOwner.h"
 #include "../UsableScriptObject.h"
